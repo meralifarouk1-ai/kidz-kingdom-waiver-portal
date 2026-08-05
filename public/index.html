@@ -308,7 +308,7 @@
 (function () {
   var todayField = document.getElementById('today');
   var today = new Date();
-  todayField.value = today.toLocaleDateString('en-CA');
+  todayField.value = today.toLocaleDateString('en-CA', { timeZone: 'America/Edmonton' });
 
   // ---- Signature pad ----
   var canvas = document.getElementById('sigpad');

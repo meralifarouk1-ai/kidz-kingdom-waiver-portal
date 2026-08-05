@@ -212,7 +212,7 @@
           <th>Children</th>
           <th>Phone</th>
           <th>Email</th>
-          <th>Submitted</th>
+          <th>Submitted (MT)</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -237,9 +237,19 @@
 <script>
 (function () {
   var PAGE_SIZE = 10;
+  var MT_TZ = 'America/Edmonton';
   var state = { all: [], filtered: [], page: 1 };
 
   function pw() { return sessionStorage.getItem('kk_admin_pw') || ''; }
+
+  function mtDateStr(date) { return date.toLocaleDateString('en-CA', { timeZone: MT_TZ }); }
+  function mtDate(date) { return date.toLocaleDateString('en-US', { timeZone: MT_TZ, year: 'numeric', month: 'short', day: 'numeric' }); }
+  function mtDateTime(date) {
+    return date.toLocaleString('en-US', {
+      timeZone: MT_TZ, year: 'numeric', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit'
+    }) + ' MT';
+  }
 
   // ---- Login ----
   function tryLogin(password) {
@@ -295,8 +305,8 @@
   function renderStats() {
     var all = state.all;
     document.getElementById('statTotal').textContent = all.length;
-    var todayStr = new Date().toDateString();
-    var todayCount = all.filter(function (s) { return new Date(s.submittedAt).toDateString() === todayStr; }).length;
+    var todayStr = mtDateStr(new Date());
+    var todayCount = all.filter(function (s) { return mtDateStr(new Date(s.submittedAt)) === todayStr; }).length;
     document.getElementById('statToday').textContent = todayCount;
     var totalChildren = all.reduce(function (sum, s) { return sum + (s.children ? s.children.length : 0); }, 0);
     document.getElementById('statChildren').textContent = totalChildren;
@@ -336,7 +346,7 @@
         '<td>' + escapeHtml((item.children || []).join(', ')) + '</td>' +
         '<td>' + escapeHtml(item.phone) + '</td>' +
         '<td>' + escapeHtml(item.email) + '</td>' +
-        '<td>' + submittedDate.toLocaleDateString() + '</td>' +
+        '<td>' + mtDate(submittedDate) + '</td>' +
         '<td><button class="btn-view" data-id="' + item.id + '">View</button><button class="btn-delete" data-id="' + item.id + '">Delete</button></td>';
       tbody.appendChild(tr);
     });
@@ -395,7 +405,7 @@
           '<div class="row"><span>Phone</span><span>' + escapeHtml(s.phone) + '</span></div>' +
           '<div class="row"><span>Email</span><span>' + escapeHtml(s.email) + '</span></div>' +
           '<div class="row"><span>Children</span><span>' + escapeHtml((s.children || []).join(', ')) + '</span></div>' +
-          '<div class="row"><span>Submitted</span><span>' + new Date(s.submittedAt).toLocaleString() + '</span></div>' +
+          '<div class="row"><span>Submitted</span><span>' + mtDateTime(new Date(s.submittedAt)) + '</span></div>' +
           '<div class="row"><span>Printed Name</span><span>' + escapeHtml(s.printedName) + '</span></div>' +
           '<div class="row"><span>Rules Acknowledged</span><span class="rule-ok">' + (s.rulesAcknowledged ? 'Yes' : 'No') + '</span></div>' +
           initialsHtml +
