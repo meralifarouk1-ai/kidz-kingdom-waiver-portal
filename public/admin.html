@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kidz Kingdom | Admin</title>
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --panel: #131a2b;
+    --panel-2: #101627;
+    --border: #232c42;
+    --ink: #eef1fb;
+    --muted: #8b93ab;
+    --accent: #a855f7;
+    --accent-2: #ec4899;
+    --green: #22c55e;
+    --red: #ef4444;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  /* ---- Login screen ---- */
+  #loginScreen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .login-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 34px 30px;
+    width: 100%;
+    max-width: 340px;
+    text-align: center;
+  }
+  .login-card img { height: 56px; margin-bottom: 10px; }
+  .login-card h1 { font-size: 1.1rem; margin: 4px 0 2px; }
+  .login-card p { color: var(--muted); font-size: 0.85rem; margin: 0 0 18px; }
+  .login-card input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--ink);
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+  }
+  .login-card button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .login-error { color: var(--red); font-size: 0.82rem; margin-top: 10px; min-height: 1em; }
+
+  /* ---- Dashboard layout ---- */
+  #dashboard { display: none; min-height: 100vh; }
+  #dashboard.show { display: flex; }
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 24px 18px;
+  }
+  .sidebar .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .sidebar .brand img { height: 34px; }
+  .sidebar .brand-text { font-weight: 700; font-size: 1.05rem; }
+  .sidebar .sub { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 26px; }
+  .navitem {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 10px; font-size: 0.92rem; font-weight: 600;
+    color: var(--ink); background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+  }
+
+  .content { flex: 1; padding: 28px 32px; min-width: 0; }
+  .content h1 { font-size: 1.6rem; margin: 0 0 20px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  @media (max-width: 900px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+  .stat-card .label { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; }
+  .stat-card .value { font-size: 1.9rem; font-weight: 700; margin: 8px 0 4px; }
+  .stat-card .sub { font-size: 0.78rem; color: var(--muted); }
+  .stat-card .sub b { color: var(--green); }
+
+  .toolbar { display: flex; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .toolbar input[type="text"] {
+    flex: 1; min-width: 200px; padding: 11px 14px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--ink); font-size: 0.9rem;
+  }
+  .toolbar button {
+    padding: 11px 16px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--ink); font-weight: 600; font-size: 0.85rem; cursor: pointer;
+    white-space: nowrap;
+  }
+  .toolbar button.primary { background: var(--green); color: #06240f; border-color: var(--green); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: var(--radius); overflow: hidden; }
+  thead th {
+    text-align: left; padding: 12px 16px; font-size: 0.72rem; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 14px 16px; font-size: 0.88rem; border-bottom: 1px solid var(--border); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  .btn-view { background: #2563eb22; color: #60a5fa; border: 1px solid #2563eb44; padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; margin-right: 6px; }
+  .btn-delete { background: #ef444422; color: #f87171; border: 1px solid #ef444444; padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; }
+
+  .table-footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 4px; color: var(--muted); font-size: 0.85rem; }
+  .table-footer .pager button {
+    background: var(--panel); border: 1px solid var(--border); color: var(--ink);
+    padding: 7px 12px; border-radius: 8px; cursor: pointer; margin-left: 8px; font-size: 0.82rem;
+  }
+  .table-footer .pager button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .empty-state { text-align: center; padding: 50px 20px; color: var(--muted); }
+
+  /* ---- Modal ---- */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    align-items: center; justify-content: center; padding: 20px; z-index: 50;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto; padding: 24px;
+  }
+  .modal h2 { margin: 0 0 16px; font-size: 1.15rem; }
+  .modal .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
+  .modal .row span:first-child { color: var(--muted); }
+  .modal .sig-img { width: 100%; background: #fff; border-radius: 10px; margin-top: 12px; padding: 10px; }
+  .modal .sig-img img { width: 100%; display: block; }
+  .modal-close { margin-top: 18px; width: 100%; padding: 11px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); color: var(--ink); cursor: pointer; font-weight: 600; }
+  .rule-ok { color: var(--green); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-card">
+    <img src="/assets/logo.png" alt="Kidz Kingdom">
+    <h1>Admin Login</h1>
+    <p>Enter the admin password to view waiver submissions.</p>
+    <input type="password" id="pwInput" placeholder="Password">
+    <button id="loginBtn">Log In</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div id="dashboard">
+  <div class="sidebar">
+    <div class="brand"><img src="/assets/logo.png" alt="logo"><span class="brand-text">Kidz Kingdom</span></div>
+    <div class="sub">Waiver Admin</div>
+    <div class="navitem">📋 Submissions</div>
+  </div>
+
+  <div class="content">
+    <h1>Waiver Submissions</h1>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="label">Total Submissions</div>
+        <div class="value" id="statTotal">0</div>
+        <div class="sub"><b id="statToday">0</b> today</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Children Registered</div>
+        <div class="value" id="statChildren">0</div>
+        <div class="sub">across all waivers</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">This Week</div>
+        <div class="value" id="statWeek">0</div>
+        <div class="sub">last 7 days</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Avg. Children / Waiver</div>
+        <div class="value" id="statAvg">0.0</div>
+        <div class="sub">per family</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="Search by name, email, phone, or child...">
+      <button class="primary" id="exportBtn">⬇ Export CSV</button>
+      <button id="refreshBtn">⟳ Refresh</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Parent / Guardian</th>
+          <th>Children</th>
+          <th>Phone</th>
+          <th>Email</th>
+          <th>Submitted</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div id="emptyState" class="empty-state" style="display:none;">No submissions yet.</div>
+
+    <div class="table-footer">
+      <span id="pageInfo">Showing 0–0 of 0</span>
+      <span class="pager">
+        <button id="prevBtn">← Prev</button>
+        <button id="nextBtn">Next →</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+(function () {
+  var PAGE_SIZE = 10;
+  var state = { all: [], filtered: [], page: 1 };
+
+  function pw() { return sessionStorage.getItem('kk_admin_pw') || ''; }
+
+  // ---- Login ----
+  function tryLogin(password) {
+    var errBox = document.getElementById('loginError');
+    errBox.textContent = '';
+    return fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: password })
+    }).then(function (res) {
+      if (!res.ok) throw new Error('Incorrect password');
+      sessionStorage.setItem('kk_admin_pw', password);
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('dashboard').classList.add('show');
+      loadData();
+    }).catch(function (err) {
+      errBox.textContent = err.message;
+    });
+  }
+
+  document.getElementById('loginBtn').addEventListener('click', function () {
+    tryLogin(document.getElementById('pwInput').value);
+  });
+  document.getElementById('pwInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') tryLogin(this.value);
+  });
+
+  if (pw()) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('dashboard').classList.add('show');
+    loadData();
+  }
+
+  // ---- Data loading ----
+  function loadData() {
+    fetch('/api/admin/list', { headers: { 'x-admin-password': pw() } })
+      .then(function (res) {
+        if (res.status === 401) {
+          sessionStorage.removeItem('kk_admin_pw');
+          location.reload();
+          throw new Error('Session expired');
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        state.all = data.submissions || [];
+        applyFilter();
+        renderStats();
+      })
+      .catch(function (err) { console.error(err); });
+  }
+
+  function renderStats() {
+    var all = state.all;
+    document.getElementById('statTotal').textContent = all.length;
+    var todayStr = new Date().toDateString();
+    var todayCount = all.filter(function (s) { return new Date(s.submittedAt).toDateString() === todayStr; }).length;
+    document.getElementById('statToday').textContent = todayCount;
+    var totalChildren = all.reduce(function (sum, s) { return sum + (s.children ? s.children.length : 0); }, 0);
+    document.getElementById('statChildren').textContent = totalChildren;
+    var weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    var weekCount = all.filter(function (s) { return new Date(s.submittedAt).getTime() >= weekAgo; }).length;
+    document.getElementById('statWeek').textContent = weekCount;
+    document.getElementById('statAvg').textContent = all.length ? (totalChildren / all.length).toFixed(1) : '0.0';
+  }
+
+  function applyFilter() {
+    var q = document.getElementById('searchInput').value.trim().toLowerCase();
+    state.filtered = !q ? state.all.slice() : state.all.filter(function (s) {
+      var hay = [s.parentName, s.email, s.phone].concat(s.children || []).join(' ').toLowerCase();
+      return hay.indexOf(q) !== -1;
+    });
+    state.page = 1;
+    renderTable();
+  }
+
+  document.getElementById('searchInput').addEventListener('input', applyFilter);
+  document.getElementById('refreshBtn').addEventListener('click', loadData);
+
+  function renderTable() {
+    var tbody = document.getElementById('tableBody');
+    var start = (state.page - 1) * PAGE_SIZE;
+    var pageItems = state.filtered.slice(start, start + PAGE_SIZE);
+
+    tbody.innerHTML = '';
+    document.getElementById('emptyState').style.display = state.filtered.length ? 'none' : 'block';
+
+    pageItems.forEach(function (item, i) {
+      var tr = document.createElement('tr');
+      var submittedDate = new Date(item.submittedAt);
+      tr.innerHTML =
+        '<td>' + (start + i + 1) + '</td>' +
+        '<td>' + escapeHtml(item.parentName) + '</td>' +
+        '<td>' + escapeHtml((item.children || []).join(', ')) + '</td>' +
+        '<td>' + escapeHtml(item.phone) + '</td>' +
+        '<td>' + escapeHtml(item.email) + '</td>' +
+        '<td>' + submittedDate.toLocaleDateString() + '</td>' +
+        '<td><button class="btn-view" data-id="' + item.id + '">View</button><button class="btn-delete" data-id="' + item.id + '">Delete</button></td>';
+      tbody.appendChild(tr);
+    });
+
+    var total = state.filtered.length;
+    var shownEnd = Math.min(start + PAGE_SIZE, total);
+    document.getElementById('pageInfo').textContent =
+      total === 0 ? 'Showing 0–0 of 0' : ('Showing ' + (start + 1) + '–' + shownEnd + ' of ' + total);
+    document.getElementById('prevBtn').disabled = state.page <= 1;
+    document.getElementById('nextBtn').disabled = shownEnd >= total;
+  }
+
+  document.getElementById('prevBtn').addEventListener('click', function () {
+    if (state.page > 1) { state.page--; renderTable(); }
+  });
+  document.getElementById('nextBtn').addEventListener('click', function () {
+    if ((state.page) * PAGE_SIZE < state.filtered.length) { state.page++; renderTable(); }
+  });
+
+  document.getElementById('tableBody').addEventListener('click', function (e) {
+    var id = e.target.getAttribute('data-id');
+    if (!id) return;
+    if (e.target.classList.contains('btn-view')) openModal(id);
+    if (e.target.classList.contains('btn-delete')) deleteSubmission(id);
+  });
+
+  function escapeHtml(str) {
+    return (str || '').toString().replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  // ---- View modal ----
+  function openModal(id) {
+    fetch('/api/admin/get?id=' + encodeURIComponent(id), { headers: { 'x-admin-password': pw() } })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var s = data.submission;
+        if (!s) return;
+        var labels = {
+          assumptionOfRisk: 'Assumption of Risk',
+          releaseOfLiability: 'Release of Liability',
+          rulesRegulations: 'Rules & Regulations',
+          supervision: 'Supervision',
+          emergencyMedical: 'Emergency Medical Consent',
+          indemnity: 'Indemnity',
+          governingLaw: 'Governing Law'
+        };
+        var initialsHtml = Object.keys(labels).map(function (key) {
+          return '<div class="row"><span>' + labels[key] + '</span><span class="rule-ok">' + escapeHtml(s.initials[key] || '—') + '</span></div>';
+        }).join('');
+
+        document.getElementById('modalContent').innerHTML =
+          '<h2>Waiver Details</h2>' +
+          '<div class="row"><span>Parent / Guardian</span><span>' + escapeHtml(s.parentName) + '</span></div>' +
+          '<div class="row"><span>Phone</span><span>' + escapeHtml(s.phone) + '</span></div>' +
+          '<div class="row"><span>Email</span><span>' + escapeHtml(s.email) + '</span></div>' +
+          '<div class="row"><span>Children</span><span>' + escapeHtml((s.children || []).join(', ')) + '</span></div>' +
+          '<div class="row"><span>Submitted</span><span>' + new Date(s.submittedAt).toLocaleString() + '</span></div>' +
+          '<div class="row"><span>Printed Name</span><span>' + escapeHtml(s.printedName) + '</span></div>' +
+          '<div class="row"><span>Rules Acknowledged</span><span class="rule-ok">' + (s.rulesAcknowledged ? 'Yes' : 'No') + '</span></div>' +
+          initialsHtml +
+          '<div class="sig-img"><img src="' + s.signature + '" alt="Signature"></div>' +
+          '<button class="modal-close" id="modalCloseBtn">Close</button>';
+
+        document.getElementById('modalOverlay').classList.add('show');
+        document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+      });
+  }
+
+  function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); }
+  document.getElementById('modalOverlay').addEventListener('click', function (e) {
+    if (e.target === this) closeModal();
+  });
+
+  // ---- Delete ----
+  function deleteSubmission(id) {
+    if (!confirm('Delete this waiver submission? This cannot be undone.')) return;
+    fetch('/api/admin/delete?id=' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { 'x-admin-password': pw() }
+    }).then(function () { loadData(); });
+  }
+
+  // ---- Export CSV ----
+  document.getElementById('exportBtn').addEventListener('click', function () {
+    fetch('/api/admin/export', { headers: { 'x-admin-password': pw() } })
+      .then(function (res) { return res.blob(); })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'kidz-kingdom-waivers.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+  });
+})();
+</script>
+
+</body>
+</html>

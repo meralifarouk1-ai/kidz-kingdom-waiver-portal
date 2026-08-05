@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Kidz Kingdom | Waiver &amp; Registration</title>
+<style>
+  :root {
+    --purple: #7c3aed;
+    --purple-dark: #5b21b6;
+    --pink: #ec4899;
+    --gold: #f59e0b;
+    --bg: #faf7ff;
+    --card: #ffffff;
+    --ink: #2a1a3d;
+    --muted: #7a6f8c;
+    --border: #e7ddf7;
+    --danger: #e11d48;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(180deg, #f3e8ff 0%, var(--bg) 220px, var(--bg) 100%);
+    color: var(--ink);
+    padding-bottom: 60px;
+  }
+  header.top {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px 10px;
+    text-align: center;
+  }
+  header.top img { height: 78px; margin-bottom: 6px; }
+  header.top h1 {
+    font-size: 1.35rem;
+    margin: 4px 0 2px;
+    color: var(--purple-dark);
+  }
+  header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 20px 20px 22px;
+    margin-bottom: 18px;
+    box-shadow: 0 4px 18px rgba(124, 58, 237, 0.08);
+    border: 1px solid var(--border);
+  }
+  .card h2 {
+    font-size: 1.05rem;
+    margin: 0 0 14px;
+    color: var(--purple-dark);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card h2 .num {
+    background: var(--purple);
+    color: #fff;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+  label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 12px 0 6px;
+  }
+  label .opt { font-weight: 400; color: var(--muted); }
+  input[type="text"], input[type="tel"], input[type="email"], input[type="date"] {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+    font-size: 1rem;
+    background: #fbfaff;
+    color: var(--ink);
+  }
+  input:focus { outline: none; border-color: var(--purple); background: #fff; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  @media (max-width: 480px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .clause p { font-size: 0.92rem; line-height: 1.5; color: #45385a; margin: 0 0 10px; }
+  .clause ul { margin: 0 0 8px; padding-left: 0; list-style: none; }
+  .clause ul li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.9rem;
+    color: #45385a;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .clause ul li:last-child { border-bottom: none; }
+  .clause ul li input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--purple); flex-shrink: 0; }
+
+  .initials-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .initials-row span { font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+  .initials-row input {
+    width: 90px;
+    text-align: center;
+    text-transform: uppercase;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border);
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .sig-wrap {
+    border: 1.5px dashed var(--border);
+    border-radius: 12px;
+    background: #fbfaff;
+    position: relative;
+    touch-action: none;
+  }
+  canvas#sigpad { width: 100%; height: 180px; display: block; border-radius: 12px; touch-action: none; }
+  .sig-placeholder {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: #c9bce6; font-size: 0.9rem; pointer-events: none;
+  }
+  .sig-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+  .sig-actions button {
+    background: none; border: none; color: var(--purple); font-weight: 600;
+    font-size: 0.85rem; cursor: pointer; padding: 6px 10px;
+  }
+
+  button.submit {
+    width: 100%;
+    padding: 16px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(236, 72, 153, 0.3);
+  }
+  button.submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .error-box {
+    background: #fef2f2; border: 1px solid #fecaca; color: var(--danger);
+    padding: 12px 14px; border-radius: 12px; font-size: 0.88rem; margin-bottom: 16px; display: none;
+  }
+  .error-box.show { display: block; }
+
+  .agree-note { font-size: 0.85rem; color: var(--muted); line-height: 1.5; margin: 10px 0 16px; }
+
+  .success-screen {
+    display: none;
+    text-align: center;
+    padding: 60px 20px;
+  }
+  .success-screen.show { display: block; }
+  .success-screen .emoji { font-size: 3.5rem; }
+  .success-screen h2 { color: var(--purple-dark); margin: 10px 0 6px; }
+  .success-screen p { color: var(--muted); }
+
+  #formRoot.hide { display: none; }
+
+  footer { text-align: center; color: var(--muted); font-size: 0.78rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <img src="/assets/logo.png" alt="Kidz Kingdom logo">
+  <h1>Indoor Playground Waiver &amp; Registration</h1>
+  <p>Please complete this form before your child's first visit.</p>
+</header>
+
+<main>
+  <div id="formRoot">
+    <div class="error-box" id="errorBox"></div>
+
+    <form id="waiverForm" novalidate>
+
+      <div class="card">
+        <h2><span class="num">1</span> Family Information</h2>
+        <div class="grid2">
+          <div>
+            <label>Parent / Guardian Name</label>
+            <input type="text" id="parentName" required>
+          </div>
+          <div>
+            <label>Phone Number</label>
+            <input type="tel" id="phone" required>
+          </div>
+        </div>
+        <div class="grid2">
+          <div>
+            <label>Email</label>
+            <input type="email" id="email" required>
+          </div>
+          <div>
+            <label>Today's Date</label>
+            <input type="text" id="today" disabled>
+          </div>
+        </div>
+
+        <label>Child 1</label>
+        <input type="text" id="child1" required>
+        <label>Child 2 <span class="opt">(optional)</span></label>
+        <input type="text" id="child2">
+        <label>Child 3 <span class="opt">(optional)</span></label>
+        <input type="text" id="child3">
+        <label>Child 4 <span class="opt">(optional)</span></label>
+        <input type="text" id="child4">
+      </div>
+
+      <div class="card clause">
+        <h2><span class="num">2</span> Assumption of Risk</h2>
+        <p>I acknowledge that participation in activities at Kidz Kingdom INC involves inherent risks including slips, falls, collisions, and injuries. I voluntarily assume all risks.</p>
+        <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="assumptionOfRisk"></div>
+      </div>
+
+      <div class="card clause">
+        <h2><span class="num">3</span> Release of Liability</h2>
+        <p>To the fullest extent permitted under Alberta law, I release and hold harmless Kidz Kingdom INC, its owners, employees, affiliates, and all locations from any claims arising from participation.</p>
+        <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="releaseOfLiability"></div>
+      </div>
+
+      <div class="card clause">
+        <h2><span class="num">4</span> Rules &amp; Regulations</h2>
+        <ul>
+          <li><input type="checkbox" data-rule="1"> Children must wear grip socks at all times; adults must wear socks.</li>
+          <li><input type="checkbox" data-rule="2"> Adults are not permitted on the play structure.</li>
+          <li><input type="checkbox" data-rule="3"> No food or beverages are permitted within the soft play area.</li>
+          <li><input type="checkbox" data-rule="4"> All participants must sanitize hands prior to entering the play area.</li>
+          <li><input type="checkbox" data-rule="5"> Wristbands must be retained for same-day re-entry.</li>
+          <li><input type="checkbox" data-rule="6"> Parent/guardian must supervise children at all times unless participating in a supervised program.</li>
+          <li><input type="checkbox" data-rule="7"> If a parent/guardian cannot be located, mall security will be contacted.</li>
+        </ul>
+        <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="rulesRegulations"></div>
+      </div>
+
+      <div class="card clause">
+        <h2><span class="num">5</span> Supervision</h2>
+        <p>I am responsible for the supervision of my child unless enrolled in a supervised program.</p>
+        <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="supervision"></div>
+      </div>
+
+      <div class="card clause">
+        <h2><span class="num">6</span> Emergency Medical Consent</h2>
+        <p>I authorize staff to administer basic first aid and contact emergency services if required.</p>
+        <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="emergencyMedical"></div>
+      </div>
+
+      <div class="card clause">
+        <h2><span class="num">7</span> Indemnity</h2>
+        <p>I agree to indemnify and hold harmless Kidz Kingdom INC, its owners, employees, affiliates, and all locations from any claims, demands, or actions arising from my child's participation.</p>
+        <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="indemnity"></div>
+      </div>
+
+      <div class="card clause">
+        <h2><span class="num">8</span> Governing Law</h2>
+        <p>This agreement shall be governed by and interpreted in accordance with the laws of the Province of Alberta.</p>
+        <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="governingLaw"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="num">9</span> Signature</h2>
+        <p class="agree-note">I have read and understand this agreement, I have had the opportunity to ask questions, and I voluntarily agree to all terms.</p>
+        <label>Printed Name</label>
+        <input type="text" id="printedName" required>
+        <label>Sign below <span class="opt">(use your finger or mouse)</span></label>
+        <div class="sig-wrap">
+          <canvas id="sigpad"></canvas>
+          <span class="sig-placeholder" id="sigPlaceholder">Sign here</span>
+        </div>
+        <div class="sig-actions"><button type="button" id="clearSig">Clear signature</button></div>
+      </div>
+
+      <button type="submit" class="submit" id="submitBtn">Submit Waiver</button>
+    </form>
+  </div>
+
+  <div class="success-screen" id="successScreen">
+    <div class="emoji">🎉</div>
+    <h2>Thank you!</h2>
+    <p>Your waiver has been received. Have a great time at Kidz Kingdom!</p>
+  </div>
+
+  <footer>Kidz Kingdom INC &middot; play &middot; learn &middot; grow</footer>
+</main>
+
+<script>
+(function () {
+  var todayField = document.getElementById('today');
+  var today = new Date();
+  todayField.value = today.toLocaleDateString('en-CA');
+
+  // ---- Signature pad ----
+  var canvas = document.getElementById('sigpad');
+  var placeholder = document.getElementById('sigPlaceholder');
+  var ctx = canvas.getContext('2d');
+  var drawing = false;
+  var hasDrawn = false;
+
+  function resizeCanvas() {
+    var ratio = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var prev = hasDrawn ? canvas.toDataURL() : null;
+    canvas.width = rect.width * ratio;
+    canvas.height = rect.height * ratio;
+    ctx.scale(ratio, ratio);
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#2a1a3d';
+    if (prev) {
+      var img = new Image();
+      img.onload = function () { ctx.drawImage(img, 0, 0, rect.width, rect.height); };
+      img.src = prev;
+    }
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  function pos(e) {
+    var rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+  canvas.addEventListener('pointerdown', function (e) {
+    drawing = true;
+    hasDrawn = true;
+    placeholder.style.display = 'none';
+    var p = pos(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (!drawing) return;
+    var p = pos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (evt) {
+    canvas.addEventListener(evt, function () { drawing = false; });
+  });
+  document.getElementById('clearSig').addEventListener('click', function () {
+    var rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    hasDrawn = false;
+    placeholder.style.display = 'block';
+  });
+
+  // ---- Submit ----
+  var form = document.getElementById('waiverForm');
+  var errorBox = document.getElementById('errorBox');
+  var submitBtn = document.getElementById('submitBtn');
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.classList.add('show');
+    errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    errorBox.classList.remove('show');
+
+    var parentName = document.getElementById('parentName').value.trim();
+    var phone = document.getElementById('phone').value.trim();
+    var email = document.getElementById('email').value.trim();
+    var printedName = document.getElementById('printedName').value.trim();
+    var children = [1, 2, 3, 4]
+      .map(function (n) { return document.getElementById('child' + n).value.trim(); })
+      .filter(Boolean);
+
+    if (!parentName || !phone || !email) return showError('Please fill in your name, phone, and email.');
+    if (children.length === 0) return showError('Please enter at least one child.');
+    if (!printedName) return showError('Please type your printed name.');
+    if (!hasDrawn) return showError('Please sign the waiver before submitting.');
+
+    var checkboxes = document.querySelectorAll('[data-rule]');
+    for (var i = 0; i < checkboxes.length; i++) {
+      if (!checkboxes[i].checked) return showError('Please check every rule in the Rules & Regulations section.');
+    }
+
+    var initialInputs = document.querySelectorAll('[data-initial]');
+    var initials = {};
+    for (var j = 0; j < initialInputs.length; j++) {
+      var val = initialInputs[j].value.trim();
+      if (!val) return showError('Please add your initials to every section.');
+      initials[initialInputs[j].getAttribute('data-initial')] = val;
+    }
+
+    var payload = {
+      parentName: parentName,
+      phone: phone,
+      email: email,
+      children: children,
+      initials: initials,
+      rulesAcknowledged: true,
+      printedName: printedName,
+      signature: canvas.toDataURL('image/png')
+    };
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+
+    fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) {
+        if (!res.ok) return res.json().then(function (d) { throw new Error(d.error || 'Submission failed'); });
+        return res.json();
+      })
+      .then(function () {
+        document.getElementById('formRoot').classList.add('hide');
+        document.getElementById('successScreen').classList.add('show');
+        window.scrollTo(0, 0);
+      })
+      .catch(function (err) {
+        showError(err.message || 'Something went wrong. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Waiver';
+      });
+  });
+})();
+</script>
+
+</body>
+</html>
