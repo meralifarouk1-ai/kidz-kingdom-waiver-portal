@@ -28,13 +28,13 @@ export default async (req: Request, context: Context) => {
   const index = (await indexStore.get("index", { type: "json" })) || [];
   index.sort((a: any, b: any) => (a.submittedAt < b.submittedAt ? 1 : -1));
 
-  const header = ["Parent/Guardian Name", "Email", "Phone", "Children", "Submitted"];
+  const header = ["Parent/Guardian Name", "Email", "Phone", "Children", "Submitted (Mountain Time)"];
   const rows = index.map((item: any) => [
     item.parentName,
     item.email,
     item.phone,
     (item.children || []).join("; "),
-    new Date(item.submittedAt).toLocaleString("en-CA"),
+    new Date(item.submittedAt).toLocaleString("en-CA", { timeZone: "America/Edmonton" }),
   ]);
 
   const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n");
