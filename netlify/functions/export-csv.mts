@@ -24,9 +24,19 @@ export default async (req: Request, context: Context) => {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
 
+  const url = new URL(req.url);
+  const dateFilter = url.searchParams.get("date") || "";
+
   const indexStore = getStore("waiver-index");
-  const index = (await indexStore.get("index", { type: "json" })) || [];
+  let index = (await indexStore.get("index", { type: "json" })) || [];
   index.sort((a: any, b: any) => (a.submittedAt < b.submittedAt ? 1 : -1));
+
+  if (dateFilter) {
+    index = index.filter((item: any) => {
+      const mtDate = new Date(item.submittedAt).toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
+      return mtDate === dateFilter;
+    });
+  }
 
   const header = ["Parent/Guardian Name", "Email", "Phone", "Children", "Submitted (Mountain Time)"];
   const rows = index.map((item: any) => [
@@ -38,12 +48,13 @@ export default async (req: Request, context: Context) => {
   ]);
 
   const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n");
+  const filename = dateFilter ? `kidz-kingdom-waivers-${dateFilter}.csv` : "kidz-kingdom-waivers.csv";
 
   return new Response(csv, {
     status: 200,
     headers: {
       "content-type": "text/csv",
-      "content-disposition": `attachment; filename="kidz-kingdom-waivers.csv"`,
+      "content-disposition": `attachment; filename="${filename}"`,
     },
   });
 };
