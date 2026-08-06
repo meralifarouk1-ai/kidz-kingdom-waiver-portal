@@ -85,12 +85,21 @@
   .navitem {
     display: flex; align-items: center; gap: 10px;
     padding: 10px 12px; border-radius: 10px; font-size: 0.92rem; font-weight: 600;
+    color: var(--muted); background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    margin-bottom: 6px;
+  }
+  .navitem:hover { color: var(--ink); background: rgba(255,255,255,0.03); }
+  .navitem.active {
     color: var(--ink); background: rgba(168, 85, 247, 0.15);
     border: 1px solid rgba(168, 85, 247, 0.3);
   }
 
   .content { flex: 1; padding: 28px 32px; min-width: 0; }
   .content h1 { font-size: 1.6rem; margin: 0 0 20px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
 
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
   @media (max-width: 900px) { .stats { grid-template-columns: repeat(2, 1fr); } }
@@ -100,10 +109,15 @@
   .stat-card .sub { font-size: 0.78rem; color: var(--muted); }
   .stat-card .sub b { color: var(--green); }
 
-  .toolbar { display: flex; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .toolbar { display: flex; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; align-items: center; }
   .toolbar input[type="text"] {
     flex: 1; min-width: 200px; padding: 11px 14px; border-radius: 10px;
     border: 1px solid var(--border); background: var(--panel); color: var(--ink); font-size: 0.9rem;
+  }
+  .toolbar input[type="date"] {
+    padding: 10px 14px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--ink); font-size: 0.9rem;
+    color-scheme: dark;
   }
   .toolbar button {
     padding: 11px 16px; border-radius: 10px; border: 1px solid var(--border);
@@ -111,6 +125,8 @@
     white-space: nowrap;
   }
   .toolbar button.primary { background: var(--green); color: #06240f; border-color: var(--green); }
+  .date-summary { color: var(--muted); font-size: 0.85rem; margin-bottom: 14px; }
+  .search-hint { text-align: center; padding: 50px 20px; color: var(--muted); }
 
   table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: var(--radius); overflow: hidden; }
   thead th {
@@ -169,64 +185,143 @@
   <div class="sidebar">
     <div class="brand"><img src="/assets/logo.png" alt="logo"><span class="brand-text">Kidz Kingdom</span></div>
     <div class="sub">Waiver Admin</div>
-    <div class="navitem">📋 Submissions</div>
+    <div class="navitem active" data-tab="all">📋 All Submissions</div>
+    <div class="navitem" data-tab="date">📅 By Date</div>
+    <div class="navitem" data-tab="search">🔍 Search</div>
   </div>
 
   <div class="content">
-    <h1>Waiver Submissions</h1>
 
-    <div class="stats">
-      <div class="stat-card">
-        <div class="label">Total Submissions</div>
-        <div class="value" id="statTotal">0</div>
-        <div class="sub"><b id="statToday">0</b> today</div>
+    <!-- ===== Tab: All Submissions ===== -->
+    <div class="panel active" id="panel-all">
+      <h1>Waiver Submissions</h1>
+
+      <div class="stats">
+        <div class="stat-card">
+          <div class="label">Total Submissions</div>
+          <div class="value" id="statTotal">0</div>
+          <div class="sub"><b id="statToday">0</b> today</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Children Registered</div>
+          <div class="value" id="statChildren">0</div>
+          <div class="sub">across all waivers</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">This Week</div>
+          <div class="value" id="statWeek">0</div>
+          <div class="sub">last 7 days</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Avg. Children / Waiver</div>
+          <div class="value" id="statAvg">0.0</div>
+          <div class="sub">per family</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div class="label">Children Registered</div>
-        <div class="value" id="statChildren">0</div>
-        <div class="sub">across all waivers</div>
+
+      <div class="toolbar">
+        <input type="text" id="allSearchBox_kk" placeholder="Search by name, email, phone, or child..." autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
+        <button class="primary" id="exportBtn">⬇ Export All (CSV)</button>
+        <button id="refreshBtn">⟳ Refresh</button>
       </div>
-      <div class="stat-card">
-        <div class="label">This Week</div>
-        <div class="value" id="statWeek">0</div>
-        <div class="sub">last 7 days</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Avg. Children / Waiver</div>
-        <div class="value" id="statAvg">0.0</div>
-        <div class="sub">per family</div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Parent / Guardian</th>
+            <th>Children</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Submitted (MT)</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="allBody"></tbody>
+      </table>
+      <div id="allEmpty" class="empty-state" style="display:none;">No submissions yet.</div>
+
+      <div class="table-footer">
+        <span id="allPageInfo">Showing 0–0 of 0</span>
+        <span class="pager">
+          <button id="allPrev">← Prev</button>
+          <button id="allNext">Next →</button>
+        </span>
       </div>
     </div>
 
-    <div class="toolbar">
-      <input type="text" id="searchInput" placeholder="Search by name, email, phone, or child...">
-      <button class="primary" id="exportBtn">⬇ Export CSV</button>
-      <button id="refreshBtn">⟳ Refresh</button>
+    <!-- ===== Tab: By Date ===== -->
+    <div class="panel" id="panel-date">
+      <h1>Registrations By Date</h1>
+
+      <div class="toolbar">
+        <input type="date" id="dateInput_kk">
+        <button id="datePrevDay">← Prev Day</button>
+        <button id="dateNextDay">Next Day →</button>
+        <button class="primary" id="dateExportBtn">⬇ Export This Date (CSV)</button>
+      </div>
+      <div class="date-summary" id="dateSummary">0 registrations</div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Parent / Guardian</th>
+            <th>Children</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Submitted (MT)</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="dateBody"></tbody>
+      </table>
+      <div id="dateEmpty" class="empty-state" style="display:none;">No registrations on this date.</div>
+
+      <div class="table-footer">
+        <span id="datePageInfo">Showing 0–0 of 0</span>
+        <span class="pager">
+          <button id="datePrev">← Prev</button>
+          <button id="dateNext">Next →</button>
+        </span>
+      </div>
     </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Parent / Guardian</th>
-          <th>Children</th>
-          <th>Phone</th>
-          <th>Email</th>
-          <th>Submitted (MT)</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="tableBody"></tbody>
-    </table>
-    <div id="emptyState" class="empty-state" style="display:none;">No submissions yet.</div>
+    <!-- ===== Tab: Search ===== -->
+    <div class="panel" id="panel-search">
+      <h1>Search Submissions</h1>
 
-    <div class="table-footer">
-      <span id="pageInfo">Showing 0–0 of 0</span>
-      <span class="pager">
-        <button id="prevBtn">← Prev</button>
-        <button id="nextBtn">Next →</button>
-      </span>
+      <div class="toolbar">
+        <input type="text" id="searchByNamePhone_kk" placeholder="Search by name or mobile number..." autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
+      </div>
+
+      <div id="searchHint" class="search-hint">Type a name or mobile number above to search.</div>
+
+      <table id="searchTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Parent / Guardian</th>
+            <th>Children</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Submitted (MT)</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="searchBody"></tbody>
+      </table>
+      <div id="searchEmpty" class="empty-state" style="display:none;">No matches found.</div>
+
+      <div class="table-footer" id="searchFooter" style="display:none;">
+        <span id="searchPageInfo">Showing 0–0 of 0</span>
+        <span class="pager">
+          <button id="searchPrev">← Prev</button>
+          <button id="searchNext">Next →</button>
+        </span>
+      </div>
     </div>
+
   </div>
 </div>
 
@@ -238,7 +333,7 @@
 (function () {
   var PAGE_SIZE = 10;
   var MT_TZ = 'America/Edmonton';
-  var state = { all: [], filtered: [], page: 1 };
+  var state = { all: [] };
 
   function pw() { return sessionStorage.getItem('kk_admin_pw') || ''; }
 
@@ -250,6 +345,96 @@
       hour: 'numeric', minute: '2-digit'
     }) + ' MT';
   }
+  function mtDateLong(dateStr) {
+    // dateStr is 'YYYY-MM-DD'; parse as a Mountain-Time calendar date for display.
+    var parts = dateStr.split('-');
+    var d = new Date(Date.UTC(+parts[0], +parts[1] - 1, +parts[2], 12, 0, 0));
+    return d.toLocaleDateString('en-US', { timeZone: MT_TZ, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  function escapeHtml(str) {
+    return (str || '').toString().replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function rowHtml(item, num) {
+    var submittedDate = new Date(item.submittedAt);
+    return (
+      '<tr>' +
+      '<td>' + num + '</td>' +
+      '<td>' + escapeHtml(item.parentName) + '</td>' +
+      '<td>' + escapeHtml((item.children || []).join(', ')) + '</td>' +
+      '<td>' + escapeHtml(item.phone) + '</td>' +
+      '<td>' + escapeHtml(item.email) + '</td>' +
+      '<td>' + mtDate(submittedDate) + '</td>' +
+      '<td><button class="btn-view" data-id="' + item.id + '">View</button><button class="btn-delete" data-id="' + item.id + '">Delete</button></td>' +
+      '</tr>'
+    );
+  }
+
+  // ---- Reusable table view (used by All / Date / Search tabs) ----
+  function createTableView(prefix, emptyMessage) {
+    var st = { items: [], page: 1 };
+
+    function render() {
+      var tbody = document.getElementById(prefix + 'Body');
+      var start = (st.page - 1) * PAGE_SIZE;
+      var pageItems = st.items.slice(start, start + PAGE_SIZE);
+      tbody.innerHTML = pageItems.map(function (item, i) { return rowHtml(item, start + i + 1); }).join('');
+
+      var emptyEl = document.getElementById(prefix + 'Empty');
+      if (emptyEl) emptyEl.style.display = st.items.length ? 'none' : 'block';
+
+      var total = st.items.length;
+      var shownEnd = Math.min(start + PAGE_SIZE, total);
+      var infoEl = document.getElementById(prefix + 'PageInfo');
+      if (infoEl) {
+        infoEl.textContent = total === 0 ? 'Showing 0–0 of 0' : ('Showing ' + (start + 1) + '–' + shownEnd + ' of ' + total);
+      }
+      var prevEl = document.getElementById(prefix + 'Prev');
+      var nextEl = document.getElementById(prefix + 'Next');
+      if (prevEl) prevEl.disabled = st.page <= 1;
+      if (nextEl) nextEl.disabled = shownEnd >= total;
+    }
+
+    function setItems(items) {
+      st.items = items;
+      st.page = 1;
+      render();
+    }
+
+    var prevBtn = document.getElementById(prefix + 'Prev');
+    var nextBtn = document.getElementById(prefix + 'Next');
+    if (prevBtn) prevBtn.addEventListener('click', function () { if (st.page > 1) { st.page--; render(); } });
+    if (nextBtn) nextBtn.addEventListener('click', function () { if (st.page * PAGE_SIZE < st.items.length) { st.page++; render(); } });
+
+    document.getElementById(prefix + 'Body').addEventListener('click', function (e) {
+      var id = e.target.getAttribute('data-id');
+      if (!id) return;
+      if (e.target.classList.contains('btn-view')) openModal(id);
+      if (e.target.classList.contains('btn-delete')) deleteSubmission(id);
+    });
+
+    return { setItems: setItems, render: render };
+  }
+
+  var allView = createTableView('all');
+  var dateView = createTableView('date');
+  var searchView = createTableView('search');
+
+  // ---- Tab switching ----
+  var navItems = document.querySelectorAll('.navitem');
+  navItems.forEach(function (el) {
+    el.addEventListener('click', function () {
+      navItems.forEach(function (n) { n.classList.remove('active'); });
+      el.classList.add('active');
+      document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
+      var tab = el.getAttribute('data-tab');
+      document.getElementById('panel-' + tab).classList.add('active');
+      if (tab === 'date') applyDateFilter();
+    });
+  });
 
   // ---- Login ----
   function tryLogin(password) {
@@ -296,8 +481,10 @@
       })
       .then(function (data) {
         state.all = data.submissions || [];
-        applyFilter();
         renderStats();
+        applyAllFilter();
+        applyDateFilter();
+        applySearchFilter();
       })
       .catch(function (err) { console.error(err); });
   }
@@ -316,68 +503,82 @@
     document.getElementById('statAvg').textContent = all.length ? (totalChildren / all.length).toFixed(1) : '0.0';
   }
 
-  function applyFilter() {
-    var q = document.getElementById('searchInput').value.trim().toLowerCase();
-    state.filtered = !q ? state.all.slice() : state.all.filter(function (s) {
+  document.getElementById('refreshBtn').addEventListener('click', loadData);
+
+  // ---- All Submissions tab: general search ----
+  function applyAllFilter() {
+    var q = document.getElementById('allSearchBox_kk').value.trim().toLowerCase();
+    var items = !q ? state.all.slice() : state.all.filter(function (s) {
       var hay = [s.parentName, s.email, s.phone].concat(s.children || []).join(' ').toLowerCase();
       return hay.indexOf(q) !== -1;
     });
-    state.page = 1;
-    renderTable();
+    allView.setItems(items);
   }
+  document.getElementById('allSearchBox_kk').addEventListener('input', applyAllFilter);
 
-  document.getElementById('searchInput').addEventListener('input', applyFilter);
-  document.getElementById('refreshBtn').addEventListener('click', loadData);
+  // ---- By Date tab ----
+  var dateInput = document.getElementById('dateInput_kk');
+  dateInput.value = mtDateStr(new Date());
 
-  function renderTable() {
-    var tbody = document.getElementById('tableBody');
-    var start = (state.page - 1) * PAGE_SIZE;
-    var pageItems = state.filtered.slice(start, start + PAGE_SIZE);
+  function applyDateFilter() {
+    var d = dateInput.value;
+    if (!d) { dateView.setItems([]); document.getElementById('dateSummary').textContent = 'Pick a date above.'; return; }
+    var items = state.all.filter(function (s) { return mtDateStr(new Date(s.submittedAt)) === d; });
+    dateView.setItems(items);
+    var count = items.length;
+    document.getElementById('dateSummary').textContent =
+      count + (count === 1 ? ' registration' : ' registrations') + ' on ' + mtDateLong(d);
+  }
+  dateInput.addEventListener('change', applyDateFilter);
 
-    tbody.innerHTML = '';
-    document.getElementById('emptyState').style.display = state.filtered.length ? 'none' : 'block';
+  function shiftDate(days) {
+    var d = dateInput.value ? new Date(dateInput.value + 'T12:00:00') : new Date();
+    d.setDate(d.getDate() + days);
+    dateInput.value = mtDateStr(d);
+    applyDateFilter();
+  }
+  document.getElementById('datePrevDay').addEventListener('click', function () { shiftDate(-1); });
+  document.getElementById('dateNextDay').addEventListener('click', function () { shiftDate(1); });
 
-    pageItems.forEach(function (item, i) {
-      var tr = document.createElement('tr');
-      var submittedDate = new Date(item.submittedAt);
-      tr.innerHTML =
-        '<td>' + (start + i + 1) + '</td>' +
-        '<td>' + escapeHtml(item.parentName) + '</td>' +
-        '<td>' + escapeHtml((item.children || []).join(', ')) + '</td>' +
-        '<td>' + escapeHtml(item.phone) + '</td>' +
-        '<td>' + escapeHtml(item.email) + '</td>' +
-        '<td>' + mtDate(submittedDate) + '</td>' +
-        '<td><button class="btn-view" data-id="' + item.id + '">View</button><button class="btn-delete" data-id="' + item.id + '">Delete</button></td>';
-      tbody.appendChild(tr);
+  document.getElementById('dateExportBtn').addEventListener('click', function () {
+    var d = dateInput.value;
+    downloadCsv(d ? ('/api/admin/export?date=' + encodeURIComponent(d)) : '/api/admin/export',
+      d ? ('kidz-kingdom-waivers-' + d + '.csv') : 'kidz-kingdom-waivers.csv');
+  });
+
+  // ---- Search tab: name or mobile number ----
+  function applySearchFilter() {
+    var box = document.getElementById('searchByNamePhone_kk');
+    var q = box.value.trim().toLowerCase();
+    var hint = document.getElementById('searchHint');
+    var table = document.getElementById('searchTable');
+    var footer = document.getElementById('searchFooter');
+
+    if (!q) {
+      hint.style.display = 'block';
+      table.style.display = 'none';
+      footer.style.display = 'none';
+      document.getElementById('searchEmpty').style.display = 'none';
+      searchView.setItems([]);
+      return;
+    }
+
+    hint.style.display = 'none';
+    table.style.display = 'table';
+    footer.style.display = 'flex';
+
+    var digitsOnly = q.replace(/\D/g, '');
+    var items = state.all.filter(function (s) {
+      var name = (s.parentName || '').toLowerCase();
+      var phone = (s.phone || '');
+      var phoneDigits = phone.replace(/\D/g, '');
+      var nameMatch = name.indexOf(q) !== -1;
+      var phoneMatch = digitsOnly && phoneDigits.indexOf(digitsOnly) !== -1;
+      return nameMatch || phoneMatch;
     });
-
-    var total = state.filtered.length;
-    var shownEnd = Math.min(start + PAGE_SIZE, total);
-    document.getElementById('pageInfo').textContent =
-      total === 0 ? 'Showing 0–0 of 0' : ('Showing ' + (start + 1) + '–' + shownEnd + ' of ' + total);
-    document.getElementById('prevBtn').disabled = state.page <= 1;
-    document.getElementById('nextBtn').disabled = shownEnd >= total;
+    searchView.setItems(items);
   }
-
-  document.getElementById('prevBtn').addEventListener('click', function () {
-    if (state.page > 1) { state.page--; renderTable(); }
-  });
-  document.getElementById('nextBtn').addEventListener('click', function () {
-    if ((state.page) * PAGE_SIZE < state.filtered.length) { state.page++; renderTable(); }
-  });
-
-  document.getElementById('tableBody').addEventListener('click', function (e) {
-    var id = e.target.getAttribute('data-id');
-    if (!id) return;
-    if (e.target.classList.contains('btn-view')) openModal(id);
-    if (e.target.classList.contains('btn-delete')) deleteSubmission(id);
-  });
-
-  function escapeHtml(str) {
-    return (str || '').toString().replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
+  document.getElementById('searchByNamePhone_kk').addEventListener('input', applySearchFilter);
 
   // ---- View modal ----
   function openModal(id) {
@@ -431,20 +632,24 @@
     }).then(function () { loadData(); });
   }
 
-  // ---- Export CSV ----
-  document.getElementById('exportBtn').addEventListener('click', function () {
-    fetch('/api/admin/export', { headers: { 'x-admin-password': pw() } })
+  // ---- CSV export helper ----
+  function downloadCsv(url, filename) {
+    fetch(url, { headers: { 'x-admin-password': pw() } })
       .then(function (res) { return res.blob(); })
       .then(function (blob) {
-        var url = URL.createObjectURL(blob);
+        var objUrl = URL.createObjectURL(blob);
         var a = document.createElement('a');
-        a.href = url;
-        a.download = 'kidz-kingdom-waivers.csv';
+        a.href = objUrl;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(objUrl);
       });
+  }
+
+  document.getElementById('exportBtn').addEventListener('click', function () {
+    downloadCsv('/api/admin/export', 'kidz-kingdom-waivers.csv');
   });
 })();
 </script>
