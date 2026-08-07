@@ -9,6 +9,7 @@ const REQUIRED_INITIALS = [
   "emergencyMedical",
   "indemnity",
   "governingLaw",
+  "surveillance",
 ];
 
 export default async (req: Request, context: Context) => {
