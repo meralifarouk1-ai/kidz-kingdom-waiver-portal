@@ -138,6 +138,7 @@
   tbody tr:hover { background: rgba(255,255,255,0.02); }
 
   .btn-view { background: #2563eb22; color: #60a5fa; border: 1px solid #2563eb44; padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; margin-right: 6px; }
+  .btn-pdf { background: #22c55e22; color: #4ade80; border: 1px solid #22c55e44; padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; margin-right: 6px; }
   .btn-delete { background: #ef444422; color: #f87171; border: 1px solid #ef444444; padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; }
 
   .table-footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 4px; color: var(--muted); font-size: 0.85rem; }
@@ -368,7 +369,9 @@
       '<td>' + escapeHtml(item.phone) + '</td>' +
       '<td>' + escapeHtml(item.email) + '</td>' +
       '<td>' + mtDate(submittedDate) + '</td>' +
-      '<td><button class="btn-view" data-id="' + item.id + '">View</button><button class="btn-delete" data-id="' + item.id + '">Delete</button></td>' +
+      '<td><button class="btn-view" data-id="' + item.id + '">View</button>' +
+      '<button class="btn-pdf" data-id="' + item.id + '" data-name="' + escapeHtml(item.parentName) + '">Download PDF</button>' +
+      '<button class="btn-delete" data-id="' + item.id + '">Delete</button></td>' +
       '</tr>'
     );
   }
@@ -414,6 +417,9 @@
       if (!id) return;
       if (e.target.classList.contains('btn-view')) openModal(id);
       if (e.target.classList.contains('btn-delete')) deleteSubmission(id);
+      if (e.target.classList.contains('btn-pdf')) {
+        downloadWaiverPdf(id, e.target.getAttribute('data-name') || 'waiver');
+      }
     });
 
     return { setItems: setItems, render: render };
@@ -651,6 +657,12 @@
   document.getElementById('exportBtn').addEventListener('click', function () {
     downloadCsv('/api/admin/export', 'kidz-kingdom-waivers.csv');
   });
+
+  // ---- Download filled-out waiver PDF (for dispute / record-keeping) ----
+  function downloadWaiverPdf(id, name) {
+    var safeName = (name || 'waiver').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'waiver';
+    downloadCsv('/api/admin/download-pdf?id=' + encodeURIComponent(id), 'kidz-kingdom-waiver-' + safeName + '-' + id.slice(0, 8) + '.pdf');
+  }
 })();
 </script>
 
