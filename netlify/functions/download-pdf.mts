@@ -110,6 +110,28 @@ export default async (req: Request, context: Context) => {
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
   }
 
+  // Standard PDF fonts (WinAnsi) can't encode arbitrary Unicode (emoji, CJK, etc.).
+  // Sanitize any free-text a customer typed so PDF generation never fails.
+  function sanitize(v: any): string {
+    const s = (v ?? "").toString();
+    let out = "";
+    for (const ch of s) {
+      const code = ch.codePointAt(0) || 0;
+      out += code <= 0x7e || (code >= 0xa0 && code <= 0xff) ? ch : "?";
+    }
+    return out;
+  }
+  record.parentName = sanitize(record.parentName);
+  record.phone = sanitize(record.phone);
+  record.email = sanitize(record.email);
+  record.printedName = sanitize(record.printedName);
+  record.children = Array.isArray(record.children) ? record.children.map(sanitize) : [];
+  if (record.initials && typeof record.initials === "object") {
+    Object.keys(record.initials).forEach((k) => {
+      record.initials[k] = sanitize(record.initials[k]);
+    });
+  }
+
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -280,7 +302,16 @@ export default async (req: Request, context: Context) => {
       clause.rules.forEach((rule) => {
         const lines = wrapText(rule, font, 10, contentWidth - 26);
         ensureSpace(lines.length * 14 + 4);
-        page.drawText("✓", { x: margin, y, size: 10, font: boldFont, color: green });
+        page.drawRectangle({
+          x: margin,
+          y: y - 8,
+          width: 9,
+          height: 9,
+          color: green,
+          borderColor: green,
+          borderWidth: 1,
+        });
+        page.drawText("x", { x: margin + 2, y: y - 6.5, size: 7.5, font: boldFont, color: rgb(1, 1, 1) });
         lines.forEach((line, i) => {
           page.drawText(line, { x: margin + 18, y: y - i * 14, size: 10, font, color: rgb(0.22, 0.2, 0.27) });
         });
