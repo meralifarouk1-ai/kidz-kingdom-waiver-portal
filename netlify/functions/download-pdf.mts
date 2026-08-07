@@ -60,6 +60,13 @@ const CLAUSES: { num: number; key: string; title: string; body?: string; rules?:
     title: "Governing Law",
     body: "This agreement shall be governed by and interpreted in accordance with the laws of the Province of Alberta.",
   },
+  {
+    num: 9,
+    key: "surveillance",
+    title: "Photo, Video & Audio Surveillance",
+    body:
+      "I acknowledge that Kidz Kingdom Inc. uses video and audio surveillance for safety and security purposes. Recordings are handled in accordance with applicable Alberta privacy laws, and footage may be blurred, muted, or redacted where required to protect the privacy of others.",
+  },
 ];
 
 function isAuthorized(req: Request): boolean {
@@ -323,10 +330,10 @@ export default async (req: Request, context: Context) => {
     initialsLine(initials[clause.key]);
   });
 
-  // ============ 9. Signature ============
-  sectionHeading("9", "Signature");
+  // ============ 10. Signature ============
+  sectionHeading("10", "Signature");
   paragraph(
-    "I have read and understand this agreement, I have had the opportunity to ask questions, and I voluntarily agree to all terms.",
+    "I have read and understand this agreement, I have had the opportunity to ask questions, and I voluntarily agree to all terms. This agreement shall be governed by and interpreted in accordance with the laws of the Province of Alberta.",
     { color: muted, size: 9.5 }
   );
   y -= 6;
