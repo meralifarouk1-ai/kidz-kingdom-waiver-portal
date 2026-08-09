@@ -415,7 +415,7 @@
     document.getElementById(prefix + 'Body').addEventListener('click', function (e) {
       var id = e.target.getAttribute('data-id');
       if (!id) return;
-      if (e.target.classList.contains('btn-view')) openModal(id);
+      if (e.target.classList.contains('btn-view')) viewWaiverPdf(id);
       if (e.target.classList.contains('btn-delete')) deleteSubmission(id);
       if (e.target.classList.contains('btn-pdf')) {
         downloadWaiverPdf(id, e.target.getAttribute('data-name') || 'waiver');
@@ -663,6 +663,28 @@
   function downloadWaiverPdf(id, name) {
     var safeName = (name || 'waiver').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'waiver';
     downloadCsv('/api/admin/download-pdf?id=' + encodeURIComponent(id), 'kidz-kingdom-waiver-' + safeName + '-' + id.slice(0, 8) + '.pdf');
+  }
+
+  // ---- View the actual signed waiver PDF in a new tab ----
+  function viewWaiverPdf(id) {
+    var newTab = window.open('', '_blank');
+    fetch('/api/admin/download-pdf?id=' + encodeURIComponent(id), { headers: { 'x-admin-password': pw() } })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Failed to load PDF');
+        return res.blob();
+      })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        if (newTab) {
+          newTab.location.href = url;
+        } else {
+          window.open(url, '_blank');
+        }
+      })
+      .catch(function () {
+        if (newTab) newTab.close();
+        alert('Could not load the signed waiver PDF. Please try again.');
+      });
   }
 })();
 </script>
