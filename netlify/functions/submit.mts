@@ -1,6 +1,25 @@
 import type { Context, Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 
+// Appends `entry` to the "index" blob using optimistic concurrency (etag-conditioned
+// writes) so that two near-simultaneous submissions can't silently clobber each
+// other's append (Netlify Blobs has no built-in concurrency control - last write wins).
+async function appendToIndex(indexStore: ReturnType<typeof getStore>, entry: any) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const existing = await indexStore.getWithMetadata("index", { type: "json" });
+    const currentIndex = existing?.data || [];
+    const nextIndex = [...currentIndex, entry];
+    const writeOptions = existing?.etag ? { onlyIfMatch: existing.etag } : { onlyIfNew: true };
+    const { modified } = await indexStore.setJSON("index", nextIndex, writeOptions);
+    if (modified) return;
+    await new Promise((resolve) => setTimeout(resolve, 40 + Math.random() * 120));
+  }
+  // Fallback after repeated conflicts: force the write so the submission is never lost,
+  // accepting the small risk of a rare, extreme-contention overwrite.
+  const existingIndex = (await indexStore.get("index", { type: "json" })) || [];
+  await indexStore.setJSON("index", [...existingIndex, entry]);
+}
+
 const REQUIRED_INITIALS = [
   "assumptionOfRisk",
   "releaseOfLiability",
@@ -70,8 +89,6 @@ export default async (req: Request, context: Context) => {
   const submissionsStore = getStore("waiver-submissions");
   await submissionsStore.setJSON(id, record);
 
-  const indexStore = getStore("waiver-index");
-  const existingIndex = (await indexStore.get("index", { type: "json" })) || [];
   const summary = {
     id,
     submittedAt,
@@ -80,8 +97,9 @@ export default async (req: Request, context: Context) => {
     email,
     children,
   };
-  existingIndex.push(summary);
-  await indexStore.setJSON("index", existingIndex);
+
+  const indexStore = getStore("waiver-index");
+  await appendToIndex(indexStore, summary);
 
   return new Response(JSON.stringify({ success: true, id }), {
     status: 200,

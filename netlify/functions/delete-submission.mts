@@ -1,6 +1,23 @@
 import type { Context, Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 
+// Removes the entry with `id` from the "index" blob using optimistic concurrency
+// (etag-conditioned writes) so a concurrent submit/delete can't silently clobber
+// this update (Netlify Blobs has no built-in concurrency control - last write wins).
+async function removeFromIndex(indexStore: ReturnType<typeof getStore>, id: string) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const existing = await indexStore.getWithMetadata("index", { type: "json" });
+    const currentIndex = existing?.data || [];
+    const nextIndex = currentIndex.filter((item: any) => item.id !== id);
+    const writeOptions = existing?.etag ? { onlyIfMatch: existing.etag } : { onlyIfNew: true };
+    const { modified } = await indexStore.setJSON("index", nextIndex, writeOptions);
+    if (modified) return;
+    await new Promise((resolve) => setTimeout(resolve, 40 + Math.random() * 120));
+  }
+  const existingIndex = (await indexStore.get("index", { type: "json" })) || [];
+  await indexStore.setJSON("index", existingIndex.filter((item: any) => item.id !== id));
+}
+
 function isAuthorized(req: Request): boolean {
   const expected = Netlify.env.get("ADMIN_PASSWORD") || "";
   const provided = req.headers.get("x-admin-password") || "";
@@ -26,9 +43,7 @@ export default async (req: Request, context: Context) => {
   await submissionsStore.delete(id);
 
   const indexStore = getStore("waiver-index");
-  const existingIndex = (await indexStore.get("index", { type: "json" })) || [];
-  const updatedIndex = existingIndex.filter((item: any) => item.id !== id);
-  await indexStore.setJSON("index", updatedIndex);
+  await removeFromIndex(indexStore, id);
 
   return new Response(JSON.stringify({ success: true }), {
     status: 200,
