@@ -7,11 +7,11 @@ function isAuthorized(req: Request): boolean {
   return Boolean(expected) && provided === expected;
 }
 
-// Rebuilds the "index" blob from scratch by reading every record in the
-// waiver-submissions store (the source of truth). This repairs any gaps left
-// behind by the index-append race condition that existed before the
-// optimistic-concurrency fix in submit.mts / delete-submission.mts. Safe to
-// call any time - it never touches the underlying submission records.
+// Rebuilds per-submission index entries (one blob per id, in "waiver-index")
+// from the waiver-submissions store (the source of truth). This repairs any
+// gaps and also migrates away from the old single shared "index" blob format
+// (which caused a read-modify-write bottleneck under concurrent submissions).
+// Safe to call any time - it never touches the underlying submission records.
 export default async (req: Request, context: Context) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
@@ -26,52 +26,48 @@ export default async (req: Request, context: Context) => {
 
   const { blobs } = await submissionsStore.list();
 
-  const rebuilt: any[] = [];
+  let written = 0;
   const errors: string[] = [];
 
-  // Read records concurrently in batches (this store can hold thousands of
-  // submissions - reading them one at a time can exceed the function's
+  // Read + write concurrently in batches (this store can hold thousands of
+  // submissions - doing this one at a time can exceed the function's
   // execution time limit).
   const BATCH_SIZE = 100;
   for (let i = 0; i < blobs.length; i += BATCH_SIZE) {
     const batch = blobs.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(
+    await Promise.all(
       batch.map(async ({ key }) => {
         try {
           const record = await submissionsStore.get(key, { type: "json" });
-          return { key, record };
+          if (!record) return;
+          await indexStore.setJSON(record.id, {
+            id: record.id,
+            submittedAt: record.submittedAt,
+            parentName: record.parentName,
+            phone: record.phone,
+            email: record.email,
+            children: record.children,
+          });
+          written++;
         } catch {
-          return { key, record: null, error: true };
+          errors.push(key);
         }
       })
     );
-    for (const { key, record, error } of results) {
-      if (error) {
-        errors.push(key);
-        continue;
-      }
-      if (!record) continue;
-      rebuilt.push({
-        id: record.id,
-        submittedAt: record.submittedAt,
-        parentName: record.parentName,
-        phone: record.phone,
-        email: record.email,
-        children: record.children,
-      });
-    }
   }
 
-  const before = (await indexStore.get("index", { type: "json" })) || [];
-  await indexStore.setJSON("index", rebuilt);
+  // Clean up the old single-blob "index" key from the previous storage
+  // format, if it's still there - list.mts already ignores it, but removing
+  // it keeps the store tidy.
+  try {
+    await indexStore.delete("index");
+  } catch {}
 
   return new Response(
     JSON.stringify({
       success: true,
       totalSubmissionRecords: blobs.length,
-      indexEntriesBefore: before.length,
-      indexEntriesAfter: rebuilt.length,
-      recovered: rebuilt.length - before.length,
+      indexEntriesWritten: written,
       readErrors: errors,
     }),
     { status: 200, headers: { "content-type": "application/json" } }
