@@ -29,9 +29,27 @@ export default async (req: Request, context: Context) => {
   const rebuilt: any[] = [];
   const errors: string[] = [];
 
-  for (const { key } of blobs) {
-    try {
-      const record = await submissionsStore.get(key, { type: "json" });
+  // Read records concurrently in batches (this store can hold thousands of
+  // submissions - reading them one at a time can exceed the function's
+  // execution time limit).
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < blobs.length; i += BATCH_SIZE) {
+    const batch = blobs.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(async ({ key }) => {
+        try {
+          const record = await submissionsStore.get(key, { type: "json" });
+          return { key, record };
+        } catch {
+          return { key, record: null, error: true };
+        }
+      })
+    );
+    for (const { key, record, error } of results) {
+      if (error) {
+        errors.push(key);
+        continue;
+      }
       if (!record) continue;
       rebuilt.push({
         id: record.id,
@@ -41,8 +59,6 @@ export default async (req: Request, context: Context) => {
         email: record.email,
         children: record.children,
       });
-    } catch {
-      errors.push(key);
     }
   }
 
