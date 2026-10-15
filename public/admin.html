@@ -642,7 +642,14 @@
   // ---- CSV export helper ----
   function downloadCsv(url, filename) {
     fetch(url, { headers: { 'x-admin-password': pw() } })
-      .then(function (res) { return res.blob(); })
+      .then(function (res) {
+        if (!res.ok) {
+          throw new Error(res.status === 401
+            ? 'Your session has expired. Please log out and log in again.'
+            : 'Download failed (error ' + res.status + '). Please try again.');
+        }
+        return res.blob();
+      })
       .then(function (blob) {
         var objUrl = URL.createObjectURL(blob);
         var a = document.createElement('a');
@@ -651,8 +658,9 @@
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(objUrl);
-      });
+        setTimeout(function () { URL.revokeObjectURL(objUrl); }, 1000);
+      })
+      .catch(function (err) { alert(err.message || 'Download failed. Please try again.'); });
   }
 
   document.getElementById('exportBtn').addEventListener('click', function () {
