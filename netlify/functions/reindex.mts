@@ -1,5 +1,6 @@
 import type { Context, Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
+import { buildSummary } from "../lib/waiver.mts";
 
 function isAuthorized(req: Request): boolean {
   const expected = Netlify.env.get("ADMIN_PASSWORD") || "";
@@ -40,14 +41,7 @@ export default async (req: Request, context: Context) => {
         try {
           const record = await submissionsStore.get(key, { type: "json" });
           if (!record) return;
-          await indexStore.setJSON(record.id, {
-            id: record.id,
-            submittedAt: record.submittedAt,
-            parentName: record.parentName,
-            phone: record.phone,
-            email: record.email,
-            children: record.children,
-          });
+          await indexStore.setJSON(record.id, buildSummary(record));
           written++;
         } catch {
           errors.push(key);

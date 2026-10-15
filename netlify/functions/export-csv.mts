@@ -1,18 +1,36 @@
 import type { Context, Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
+import {
+  MT_TZ,
+  MONTHS,
+  isAuthorized,
+  loadIndex,
+  childDetailsOf,
+  childFullName,
+  birthLabel,
+} from "../lib/waiver.mts";
 
-function isAuthorized(req: Request): boolean {
-  const expected = Netlify.env.get("ADMIN_PASSWORD") || "";
-  const provided = req.headers.get("x-admin-password") || "";
-  return Boolean(expected) && provided === expected;
-}
-
-function csvEscape(value: string): string {
+function csvEscape(value: unknown): string {
   const str = (value ?? "").toString();
   if (/[",\r\n]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
+}
+
+function toCsv(rows: unknown[][]): string {
+  // UTF-8 BOM so Excel shows accented names correctly.
+  return "﻿" + rows.map((row) => row.map(csvEscape).join(",")).join("\r\n");
+}
+
+function csvResponse(csv: string, filename: string): Response {
+  return new Response(csv, {
+    status: 200,
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="${filename}"`,
+    },
+  });
 }
 
 export default async (req: Request, context: Context) => {
@@ -26,52 +44,86 @@ export default async (req: Request, context: Context) => {
 
   const url = new URL(req.url);
   const dateFilter = url.searchParams.get("date") || "";
+  const birthMonth = Number(url.searchParams.get("birthMonth") || 0);
 
-  // Each submission has its own index entry blob (keyed by id) — same layout
-  // that submit.mts writes and list.mts reads. Read in concurrent batches.
-  const indexStore = getStore("waiver-index");
-  const { blobs } = await indexStore.list();
+  let index = await loadIndex(getStore("waiver-index"));
 
-  let index: any[] = [];
-  const BATCH_SIZE = 150;
-  for (let i = 0; i < blobs.length; i += BATCH_SIZE) {
-    const batch = blobs.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map(({ key }) => indexStore.get(key, { type: "json" }).catch(() => null))
-    );
-    for (const entry of results) {
-      if (entry && (entry as any).id) index.push(entry);
+  // ---- Birthday list: one row per child born in the chosen month ----
+  if (birthMonth >= 1 && birthMonth <= 12) {
+    const thisYear = Number(new Date().toLocaleDateString("en-CA", { timeZone: MT_TZ }).slice(0, 4));
+    const seen = new Set<string>();
+    const rows: unknown[][] = [];
+    // index is newest first, so the most recent contact details win for
+    // families who have signed more than one waiver.
+    for (const item of index) {
+      for (const c of childDetailsOf(item)) {
+        if (c.birthMonth !== birthMonth) continue;
+        const key = [c.firstName, c.lastName, c.birthMonth, c.birthYear].join("|").toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        rows.push([
+          c.firstName,
+          c.lastName,
+          MONTHS[c.birthMonth - 1],
+          c.birthYear,
+          thisYear - c.birthYear,
+          item.parentFirstName || item.parentName,
+          item.parentLastName,
+          item.email,
+          item.phone,
+        ]);
+      }
     }
+    rows.sort((a, b) => `${a[0]} ${a[1]}`.localeCompare(`${b[0]} ${b[1]}`));
+    const header = [
+      "Child First Name",
+      "Child Last Name",
+      "Birth Month",
+      "Birth Year",
+      `Turning (${thisYear})`,
+      "Parent First Name",
+      "Parent Last Name",
+      "Parent Email",
+      "Parent Phone",
+    ];
+    const monthName = MONTHS[birthMonth - 1].toLowerCase();
+    return csvResponse(toCsv([header, ...rows]), `kidz-kingdom-birthdays-${monthName}.csv`);
   }
-  index.sort((a: any, b: any) => (a.submittedAt < b.submittedAt ? 1 : -1));
 
+  // ---- Waiver list: one row per waiver ----
   if (dateFilter) {
     index = index.filter((item: any) => {
-      const mtDate = new Date(item.submittedAt).toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
+      const mtDate = new Date(item.submittedAt).toLocaleDateString("en-CA", { timeZone: MT_TZ });
       return mtDate === dateFilter;
     });
   }
 
-  const header = ["Parent/Guardian Name", "Email", "Phone", "Children", "Submitted (Mountain Time)"];
-  const rows = index.map((item: any) => [
-    item.parentName,
-    item.email,
-    item.phone,
-    (item.children || []).join("; "),
-    new Date(item.submittedAt).toLocaleString("en-CA", { timeZone: "America/Edmonton" }),
-  ]);
-
-  const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n");
-  const filename = dateFilter ? `kidz-kingdom-waivers-${dateFilter}.csv` : "kidz-kingdom-waivers.csv";
-
-  // UTF-8 BOM so Excel shows accented names correctly.
-  return new Response("\uFEFF" + csv, {
-    status: 200,
-    headers: {
-      "content-type": "text/csv; charset=utf-8",
-      "content-disposition": `attachment; filename="${filename}"`,
-    },
+  const header = [
+    "Parent First Name",
+    "Parent Last Name",
+    "Email",
+    "Phone",
+    "Children",
+    "Children Birth Month/Year",
+    "Submitted (Mountain Time)",
+  ];
+  const rows = index.map((item: any) => {
+    const details = childDetailsOf(item);
+    const names = details.length ? details.map(childFullName) : item.children || [];
+    return [
+      // Waivers signed before first/last names were collected only have a full name.
+      item.parentFirstName || item.parentName,
+      item.parentLastName,
+      item.email,
+      item.phone,
+      names.join("; "),
+      details.map((c) => `${childFullName(c)}: ${birthLabel(c)}`).join("; "),
+      new Date(item.submittedAt).toLocaleString("en-CA", { timeZone: MT_TZ }),
+    ];
   });
+
+  const filename = dateFilter ? `kidz-kingdom-waivers-${dateFilter}.csv` : "kidz-kingdom-waivers.csv";
+  return csvResponse(toCsv([header, ...rows]), filename);
 };
 
 export const config: Config = {

@@ -126,6 +126,12 @@
   }
   .toolbar button.primary { background: var(--green); color: #06240f; border-color: var(--green); }
   .date-summary { color: var(--muted); font-size: 0.85rem; margin-bottom: 14px; }
+  .toolbar select {
+    padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--ink); font-size: 0.9rem; color-scheme: dark;
+  }
+  .bday-note { color: var(--muted); font-size: 0.8rem; margin-top: 12px; line-height: 1.5; }
+  .copied { color: var(--green); font-size: 0.85rem; font-weight: 600; }
   .search-hint { text-align: center; padding: 50px 20px; color: var(--muted); }
 
   table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: var(--radius); overflow: hidden; }
@@ -189,6 +195,7 @@
     <div class="navitem active" data-tab="all">📋 All Submissions</div>
     <div class="navitem" data-tab="date">📅 By Date</div>
     <div class="navitem" data-tab="search">🔍 Search</div>
+    <div class="navitem" data-tab="birthdays">🎂 Birthdays</div>
   </div>
 
   <div class="content">
@@ -293,7 +300,7 @@
       <h1>Search Submissions</h1>
 
       <div class="toolbar">
-        <input type="text" id="searchByNamePhone_kk" placeholder="Search by name or mobile number..." autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
+        <input type="text" id="searchByNamePhone_kk" placeholder="Search by parent or child name, or mobile number..." autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
       </div>
 
       <div id="searchHint" class="search-hint">Type a name or mobile number above to search.</div>
@@ -321,6 +328,36 @@
           <button id="searchNext">Next →</button>
         </span>
       </div>
+    </div>
+
+    <!-- ===== Tab: Birthdays ===== -->
+    <div class="panel" id="panel-birthdays">
+      <h1>Birthdays By Month</h1>
+
+      <div class="toolbar">
+        <select id="bdayMonth_kk"></select>
+        <button id="bdayCopyEmails">✉ Copy Parent Emails</button>
+        <button class="primary" id="bdayExportBtn">⬇ Export Birthdays (CSV)</button>
+        <span class="copied" id="bdayCopied"></span>
+      </div>
+      <div class="date-summary" id="bdaySummary">0 birthdays</div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Child</th>
+            <th>Born</th>
+            <th>Turning</th>
+            <th>Parent / Guardian</th>
+            <th>Email</th>
+            <th>Phone</th>
+          </tr>
+        </thead>
+        <tbody id="bdayBody"></tbody>
+      </table>
+      <div id="bdayEmpty" class="empty-state" style="display:none;">No children with a birthday in this month.</div>
+      <p class="bday-note">Only waivers signed on the new form include birth month and year. Families who signed before this update won't appear here until they sign a new waiver. If the same child appears on more than one waiver, they're listed once with the most recent contact details.</p>
     </div>
 
   </div>
@@ -439,6 +476,7 @@
       var tab = el.getAttribute('data-tab');
       document.getElementById('panel-' + tab).classList.add('active');
       if (tab === 'date') applyDateFilter();
+      if (tab === 'birthdays') applyBirthdayFilter();
     });
   });
 
@@ -491,6 +529,7 @@
         applyAllFilter();
         applyDateFilter();
         applySearchFilter();
+        applyBirthdayFilter();
       })
       .catch(function (err) { console.error(err); });
   }
@@ -575,7 +614,7 @@
 
     var digitsOnly = q.replace(/\D/g, '');
     var items = state.all.filter(function (s) {
-      var name = (s.parentName || '').toLowerCase();
+      var name = [s.parentName].concat(s.children || []).join(' ').toLowerCase();
       var phone = (s.phone || '');
       var phoneDigits = phone.replace(/\D/g, '');
       var nameMatch = name.indexOf(q) !== -1;
@@ -612,7 +651,7 @@
           '<div class="row"><span>Parent / Guardian</span><span>' + escapeHtml(s.parentName) + '</span></div>' +
           '<div class="row"><span>Phone</span><span>' + escapeHtml(s.phone) + '</span></div>' +
           '<div class="row"><span>Email</span><span>' + escapeHtml(s.email) + '</span></div>' +
-          '<div class="row"><span>Children</span><span>' + escapeHtml((s.children || []).join(', ')) + '</span></div>' +
+          childRowsHtml(s) +
           '<div class="row"><span>Submitted</span><span>' + mtDateTime(new Date(s.submittedAt)) + '</span></div>' +
           '<div class="row"><span>Printed Name</span><span>' + escapeHtml(s.printedName) + '</span></div>' +
           '<div class="row"><span>Rules Acknowledged</span><span class="rule-ok">' + (s.rulesAcknowledged ? 'Yes' : 'No') + '</span></div>' +
@@ -638,6 +677,94 @@
       headers: { 'x-admin-password': pw() }
     }).then(function () { loadData(); });
   }
+
+  // ---- Birthdays tab ----
+  var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  function birthLabel(c) {
+    var m = MONTHS[(c.birthMonth || 0) - 1];
+    return m && c.birthYear ? (m + ' ' + c.birthYear) : '';
+  }
+
+  function childRowsHtml(s) {
+    var details = s.childDetails || [];
+    if (!details.length) {
+      return '<div class="row"><span>Children</span><span>' + escapeHtml((s.children || []).join(', ')) + '</span></div>';
+    }
+    return details.map(function (c, i) {
+      return '<div class="row"><span>Child ' + (i + 1) + '</span><span>' +
+        escapeHtml(c.firstName + ' ' + c.lastName) + ' · born ' + escapeHtml(birthLabel(c)) + '</span></div>';
+    }).join('');
+  }
+
+  var bdayMonth = document.getElementById('bdayMonth_kk');
+  bdayMonth.innerHTML = MONTHS.map(function (m, i) { return '<option value="' + (i + 1) + '">' + m + '</option>'; }).join('');
+  var nowMt = mtDateStr(new Date());
+  bdayMonth.value = String(+nowMt.slice(5, 7));
+  var bdayItems = [];
+
+  function applyBirthdayFilter() {
+    var month = +bdayMonth.value;
+    var thisYear = +mtDateStr(new Date()).slice(0, 4);
+    var seen = {};
+    bdayItems = [];
+    // state.all is newest first, so the most recent contact details win.
+    state.all.forEach(function (s) {
+      (s.childDetails || []).forEach(function (c) {
+        if (c.birthMonth !== month) return;
+        var key = [c.firstName, c.lastName, c.birthMonth, c.birthYear].join('|').toLowerCase();
+        if (seen[key]) return;
+        seen[key] = true;
+        bdayItems.push({
+          child: c.firstName + ' ' + c.lastName,
+          born: birthLabel(c),
+          turning: thisYear - c.birthYear,
+          parent: s.parentName,
+          email: s.email,
+          phone: s.phone
+        });
+      });
+    });
+    bdayItems.sort(function (a, b) { return a.child.localeCompare(b.child); });
+
+    document.getElementById('bdayBody').innerHTML = bdayItems.map(function (b, i) {
+      return '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(b.child) + '</td><td>' + escapeHtml(b.born) +
+        '</td><td>' + b.turning + '</td><td>' + escapeHtml(b.parent) + '</td><td>' + escapeHtml(b.email) +
+        '</td><td>' + escapeHtml(b.phone) + '</td></tr>';
+    }).join('');
+    document.getElementById('bdayEmpty').style.display = bdayItems.length ? 'none' : 'block';
+    var families = {};
+    bdayItems.forEach(function (b) { if (b.email) families[b.email.toLowerCase()] = true; });
+    var nFam = Object.keys(families).length;
+    document.getElementById('bdaySummary').textContent =
+      bdayItems.length + (bdayItems.length === 1 ? ' child' : ' children') + ' with a birthday in ' +
+      MONTHS[month - 1] + ' · ' + nFam + (nFam === 1 ? ' family email' : ' family emails');
+    document.getElementById('bdayCopied').textContent = '';
+  }
+  bdayMonth.addEventListener('change', applyBirthdayFilter);
+
+  document.getElementById('bdayCopyEmails').addEventListener('click', function () {
+    var seen = {};
+    var emails = [];
+    bdayItems.forEach(function (b) {
+      var e = (b.email || '').trim();
+      if (e && !seen[e.toLowerCase()]) { seen[e.toLowerCase()] = true; emails.push(e); }
+    });
+    var note = document.getElementById('bdayCopied');
+    if (!emails.length) { note.textContent = 'No emails to copy.'; return; }
+    var text = emails.join(', ');
+    function done() { note.textContent = 'Copied ' + emails.length + ' email' + (emails.length === 1 ? '' : 's') + ' — paste into BCC.'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { window.prompt('Copy these emails:', text); });
+    } else {
+      window.prompt('Copy these emails:', text);
+    }
+  });
+
+  document.getElementById('bdayExportBtn').addEventListener('click', function () {
+    var m = +bdayMonth.value;
+    downloadCsv('/api/admin/export?birthMonth=' + m, 'kidz-kingdom-birthdays-' + MONTHS[m - 1].toLowerCase() + '.csv');
+  });
 
   // ---- CSV export helper ----
   function downloadCsv(url, filename) {

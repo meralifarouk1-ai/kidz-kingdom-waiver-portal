@@ -87,9 +87,35 @@
     background: #fbfaff;
     color: var(--ink);
   }
-  input:focus { outline: none; border-color: var(--purple); background: #fff; }
+  select {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+    font-size: 1rem;
+    background: #fbfaff;
+    color: var(--ink);
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--purple); background: #fff; }
+  .child-block {
+    margin-top: 16px;
+    padding: 4px 14px 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #fdfcff;
+  }
+  .child-block h3 {
+    margin: 10px 0 0;
+    font-size: 0.92rem;
+    color: var(--purple-dark);
+  }
+  .child-block h3 .opt { font-weight: 400; color: var(--muted); font-size: 0.85rem; }
+  .bday-note { font-size: 0.8rem; color: var(--muted); margin: 10px 0 0; line-height: 1.4; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
   @media (max-width: 480px) { .grid2 { grid-template-columns: 1fr; } }
+  @media (max-width: 480px) { .grid2.keep { grid-template-columns: 1fr 1fr; } }
 
   .clause p { font-size: 0.92rem; line-height: 1.5; color: #45385a; margin: 0 0 10px; }
   .clause ul { margin: 0 0 8px; padding-left: 0; list-style: none; }
@@ -199,44 +225,40 @@
         <h2><span class="num">1</span> Family Information</h2>
         <div class="grid2">
           <div>
-            <label>Parent / Guardian Name</label>
-            <input type="text" id="parentName" required>
+            <label>Parent / Guardian First Name</label>
+            <input type="text" id="parentFirstName" autocomplete="given-name" required>
           </div>
           <div>
-            <label>Phone Number</label>
-            <input type="tel" id="phone" required>
+            <label>Parent / Guardian Last Name</label>
+            <input type="text" id="parentLastName" autocomplete="family-name" required>
           </div>
         </div>
         <div class="grid2">
           <div>
-            <label>Email</label>
-            <input type="email" id="email" required>
+            <label>Phone Number</label>
+            <input type="tel" id="phone" autocomplete="tel" required>
           </div>
           <div>
-            <label>Today's Date</label>
-            <input type="text" id="today" disabled>
+            <label>Email</label>
+            <input type="email" id="email" autocomplete="email" required>
           </div>
         </div>
+        <label>Today's Date</label>
+        <input type="text" id="today" disabled>
 
-        <label>Child 1</label>
-        <input type="text" id="child1" required>
-        <label>Child 2 <span class="opt">(optional)</span></label>
-        <input type="text" id="child2">
-        <label>Child 3 <span class="opt">(optional)</span></label>
-        <input type="text" id="child3">
-        <label>Child 4 <span class="opt">(optional)</span></label>
-        <input type="text" id="child4">
+        <div id="childBlocks"></div>
+        <p class="bday-note">We ask for your child's birth month and year so we can send a birthday greeting.</p>
       </div>
 
       <div class="card clause">
         <h2><span class="num">2</span> Assumption of Risk</h2>
-        <p>I acknowledge that participation in activities at Kidz Kingdom INC involves inherent risks including slips, falls, collisions, and injuries. I voluntarily assume all risks.</p>
+        <p>I acknowledge that being present at and participating in activities at Kidz Kingdom INC involves inherent risks, including slips, falls, collisions, and injuries, both for me as the parent/guardian and for the children listed above. On behalf of myself and those children, I voluntarily assume all risks.</p>
         <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="assumptionOfRisk"></div>
       </div>
 
       <div class="card clause">
         <h2><span class="num">3</span> Release of Liability</h2>
-        <p>To the fullest extent permitted under Alberta law, I release and hold harmless Kidz Kingdom INC, its owners, employees, affiliates, and all locations from any claims arising from participation.</p>
+        <p>To the fullest extent permitted under Alberta law, on behalf of myself and the children listed above, I release and hold harmless Kidz Kingdom INC, its owners, employees, affiliates, and all locations from any claims arising from our presence at or participation in activities at Kidz Kingdom, including any injury to me as the parent/guardian or to the children.</p>
         <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="releaseOfLiability"></div>
       </div>
 
@@ -256,25 +278,25 @@
 
       <div class="card clause">
         <h2><span class="num">5</span> Supervision</h2>
-        <p>I am responsible for the supervision of my child unless enrolled in a supervised program.</p>
+        <p>I am responsible for my own safety and for the supervision of the children listed above unless they are enrolled in a supervised program.</p>
         <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="supervision"></div>
       </div>
 
       <div class="card clause">
         <h2><span class="num">6</span> Emergency Medical Consent</h2>
-        <p>I authorize staff to administer basic first aid and contact emergency services if required.</p>
+        <p>I authorize staff to administer basic first aid to me or to the children listed above, and to contact emergency services if required.</p>
         <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="emergencyMedical"></div>
       </div>
 
       <div class="card clause">
         <h2><span class="num">7</span> Indemnity</h2>
-        <p>I agree to indemnify and hold harmless Kidz Kingdom INC, its owners, employees, affiliates, and all locations from any claims, demands, or actions arising from my child's participation.</p>
+        <p>I agree to indemnify and hold harmless Kidz Kingdom INC, its owners, employees, affiliates, and all locations from any claims, demands, or actions arising from my own or the children's presence at or participation in activities at Kidz Kingdom.</p>
         <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="indemnity"></div>
       </div>
 
       <div class="card clause">
         <h2><span class="num">8</span> Governing Law</h2>
-        <p>This agreement shall be governed by and interpreted in accordance with the laws of the Province of Alberta.</p>
+        <p>This agreement shall be governed by and interpreted in accordance with the laws of the Province of Alberta, Canada.</p>
         <div class="initials-row"><span>Initial to confirm</span><input type="text" maxlength="4" data-initial="governingLaw"></div>
       </div>
 
@@ -286,8 +308,8 @@
 
       <div class="card">
         <h2><span class="num">10</span> Signature</h2>
-        <p class="agree-note">I have read and understand this agreement, I have had the opportunity to ask questions, and I voluntarily agree to all terms. This agreement shall be governed by and interpreted in accordance with the laws of the Province of Alberta.</p>
-        <label>Printed Name</label>
+        <p class="agree-note"><strong>I have read and understood this agreement fully. I have also had an opportunity to ask questions, and this waiver applies to us both: the parent/guardian and the children. This agreement is governed by the laws of Alberta, Canada.</strong></p>
+        <label>Printed Name <span class="opt">(parent / guardian)</span></label>
         <input type="text" id="printedName" required>
         <label>Sign below <span class="opt">(use your finger or mouse)</span></label>
         <div class="sig-wrap">
@@ -315,6 +337,33 @@
   var todayField = document.getElementById('today');
   var today = new Date();
   todayField.value = today.toLocaleDateString('en-CA', { timeZone: 'America/Edmonton' });
+
+  // ---- Child blocks (first/last name + birth month/year) ----
+  var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var thisYear = today.getFullYear();
+  var monthOpts = '<option value="">Month</option>' + MONTHS.map(function (m, i) {
+    return '<option value="' + (i + 1) + '">' + m + '</option>';
+  }).join('');
+  var yearOpts = '<option value="">Year</option>';
+  for (var yr = thisYear; yr >= thisYear - 18; yr--) yearOpts += '<option value="' + yr + '">' + yr + '</option>';
+
+  var blocksHtml = '';
+  for (var c = 1; c <= 4; c++) {
+    var opt = c === 1 ? '' : ' <span class="opt">(optional)</span>';
+    blocksHtml +=
+      '<div class="child-block">' +
+        '<h3>Child ' + c + opt + '</h3>' +
+        '<div class="grid2">' +
+          '<div><label>First Name</label><input type="text" id="child' + c + 'First" autocomplete="off"></div>' +
+          '<div><label>Last Name</label><input type="text" id="child' + c + 'Last" autocomplete="off"></div>' +
+        '</div>' +
+        '<div class="grid2 keep">' +
+          '<div><label>Birth Month</label><select id="child' + c + 'Month">' + monthOpts + '</select></div>' +
+          '<div><label>Birth Year</label><select id="child' + c + 'Year">' + yearOpts + '</select></div>' +
+        '</div>' +
+      '</div>';
+  }
+  document.getElementById('childBlocks').innerHTML = blocksHtml;
 
   // ---- Signature pad ----
   var canvas = document.getElementById('sigpad');
@@ -386,16 +435,28 @@
     e.preventDefault();
     errorBox.classList.remove('show');
 
-    var parentName = document.getElementById('parentName').value.trim();
+    var parentFirstName = document.getElementById('parentFirstName').value.trim();
+    var parentLastName = document.getElementById('parentLastName').value.trim();
     var phone = document.getElementById('phone').value.trim();
     var email = document.getElementById('email').value.trim();
     var printedName = document.getElementById('printedName').value.trim();
-    var children = [1, 2, 3, 4]
-      .map(function (n) { return document.getElementById('child' + n).value.trim(); })
-      .filter(Boolean);
 
-    if (!parentName || !phone || !email) return showError('Please fill in your name, phone, and email.');
-    if (children.length === 0) return showError('Please enter at least one child.');
+    if (!parentFirstName || !parentLastName) return showError('Please enter the parent/guardian first and last name.');
+    if (!phone || !email) return showError('Please fill in your phone and email.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError('Please enter a valid email address.');
+
+    var childDetails = [];
+    for (var n = 1; n <= 4; n++) {
+      var cf = document.getElementById('child' + n + 'First').value.trim();
+      var cl = document.getElementById('child' + n + 'Last').value.trim();
+      var cm = document.getElementById('child' + n + 'Month').value;
+      var cy = document.getElementById('child' + n + 'Year').value;
+      if (!cf && !cl && !cm && !cy) continue;
+      if (!cf || !cl) return showError('Please enter both first and last name for Child ' + n + '.');
+      if (!cm || !cy) return showError('Please choose the birth month and year for Child ' + n + '.');
+      childDetails.push({ firstName: cf, lastName: cl, birthMonth: +cm, birthYear: +cy });
+    }
+    if (childDetails.length === 0) return showError('Please enter at least one child.');
     if (!printedName) return showError('Please type your printed name.');
     if (!hasDrawn) return showError('Please sign the waiver before submitting.');
 
@@ -413,10 +474,11 @@
     }
 
     var payload = {
-      parentName: parentName,
+      parentFirstName: parentFirstName,
+      parentLastName: parentLastName,
       phone: phone,
       email: email,
-      children: children,
+      childDetails: childDetails,
       initials: initials,
       rulesAcknowledged: true,
       printedName: printedName,

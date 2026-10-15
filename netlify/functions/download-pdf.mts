@@ -1,73 +1,9 @@
 import type { Context, Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { wordingFor, waiverVersionOf, childDetailsOf, birthLabel } from "../lib/waiver.mts";
 
 const MT_TZ = "America/Edmonton";
-
-const RULES = [
-  "Children must wear grip socks at all times; adults must wear socks.",
-  "Adults are not permitted on the play structure.",
-  "No food or beverages are permitted within the soft play area.",
-  "All participants must sanitize hands prior to entering the play area.",
-  "Wristbands must be retained for same-day re-entry.",
-  "Parent/guardian must supervise children at all times unless participating in a supervised program.",
-  "If a parent/guardian cannot be located, mall security will be contacted.",
-];
-
-const CLAUSES: { num: number; key: string; title: string; body?: string; rules?: string[] }[] = [
-  {
-    num: 2,
-    key: "assumptionOfRisk",
-    title: "Assumption of Risk",
-    body:
-      "I acknowledge that participation in activities at Kidz Kingdom INC involves inherent risks including slips, falls, collisions, and injuries. I voluntarily assume all risks.",
-  },
-  {
-    num: 3,
-    key: "releaseOfLiability",
-    title: "Release of Liability",
-    body:
-      "To the fullest extent permitted under Alberta law, I release and hold harmless Kidz Kingdom INC, its owners, employees, affiliates, and all locations from any claims arising from participation.",
-  },
-  {
-    num: 4,
-    key: "rulesRegulations",
-    title: "Rules & Regulations",
-    rules: RULES,
-  },
-  {
-    num: 5,
-    key: "supervision",
-    title: "Supervision",
-    body: "I am responsible for the supervision of my child unless enrolled in a supervised program.",
-  },
-  {
-    num: 6,
-    key: "emergencyMedical",
-    title: "Emergency Medical Consent",
-    body: "I authorize staff to administer basic first aid and contact emergency services if required.",
-  },
-  {
-    num: 7,
-    key: "indemnity",
-    title: "Indemnity",
-    body:
-      "I agree to indemnify and hold harmless Kidz Kingdom INC, its owners, employees, affiliates, and all locations from any claims, demands, or actions arising from my child's participation.",
-  },
-  {
-    num: 8,
-    key: "governingLaw",
-    title: "Governing Law",
-    body: "This agreement shall be governed by and interpreted in accordance with the laws of the Province of Alberta.",
-  },
-  {
-    num: 9,
-    key: "surveillance",
-    title: "Photo, Video & Audio Surveillance",
-    body:
-      "I acknowledge that Kidz Kingdom Inc. uses video and audio surveillance for safety and security purposes. Recordings are handled in accordance with applicable Alberta privacy laws, and footage may be blurred, muted, or redacted where required to protect the privacy of others.",
-  },
-];
 
 function isAuthorized(req: Request): boolean {
   const expected = Netlify.env.get("ADMIN_PASSWORD") || "";
@@ -129,6 +65,14 @@ export default async (req: Request, context: Context) => {
     return out;
   }
   record.parentName = sanitize(record.parentName);
+  record.parentFirstName = sanitize(record.parentFirstName);
+  record.parentLastName = sanitize(record.parentLastName);
+  const childDetails = childDetailsOf(record).map((c: any) => ({
+    ...c,
+    firstName: sanitize(c.firstName),
+    lastName: sanitize(c.lastName),
+  }));
+  const wording = wordingFor(waiverVersionOf(record));
   record.phone = sanitize(record.phone);
   record.email = sanitize(record.email);
   record.printedName = sanitize(record.printedName);
@@ -278,17 +222,27 @@ export default async (req: Request, context: Context) => {
   function fieldRow(label: string, value: string) {
     ensureSpace(17);
     page.drawText(label, { x: margin, y, size: 9.8, font: boldFont, color: muted });
-    page.drawText(value || "-", { x: margin + 150, y, size: 10.5, font, color: ink });
+    page.drawText(value || "-", { x: margin + 185, y, size: 10.5, font, color: ink });
     y -= 19;
   }
 
-  fieldRow("Parent / Guardian Name:", record.parentName);
+  if (record.parentFirstName || record.parentLastName) {
+    fieldRow("Parent / Guardian First Name:", record.parentFirstName);
+    fieldRow("Parent / Guardian Last Name:", record.parentLastName);
+  } else {
+    fieldRow("Parent / Guardian Name:", record.parentName);
+  }
   fieldRow("Phone Number:", record.phone);
   fieldRow("Email:", record.email);
   y -= 4;
 
   const children: string[] = Array.isArray(record.children) ? record.children : [];
-  if (children.length === 0) {
+  if (childDetails.length > 0) {
+    childDetails.forEach((c: any, i: number) => {
+      fieldRow(`Child ${i + 1}:`, `${c.firstName} ${c.lastName}`);
+      fieldRow("   Birth Month / Year:", birthLabel(c));
+    });
+  } else if (children.length === 0) {
     text("No children listed.", { size: 10, color: muted, gap: 8 });
   } else {
     children.forEach((child, i) => fieldRow(`Child ${i + 1}:`, child));
@@ -297,7 +251,7 @@ export default async (req: Request, context: Context) => {
   // ============ Clauses 2-8 ============
   const initials = record.initials || {};
 
-  CLAUSES.forEach((clause) => {
+  wording.clauses.forEach((clause) => {
     sectionHeading(String(clause.num), clause.title);
 
     if (clause.body) {
@@ -332,10 +286,7 @@ export default async (req: Request, context: Context) => {
 
   // ============ 10. Signature ============
   sectionHeading("10", "Signature");
-  paragraph(
-    "I have read and understand this agreement, I have had the opportunity to ask questions, and I voluntarily agree to all terms. This agreement shall be governed by and interpreted in accordance with the laws of the Province of Alberta.",
-    { color: muted, size: 9.5 }
-  );
+  paragraph(wording.finalStatement, { color: muted, size: 9.5 });
   y -= 6;
   fieldRow("Printed Name:", record.printedName);
   fieldRow("Rules & Regulations Acknowledged:", record.rulesAcknowledged ? "Yes - all items checked" : "No");
