@@ -132,6 +132,11 @@
   }
   .bday-note { color: var(--muted); font-size: 0.8rem; margin-top: 12px; line-height: 1.5; }
   .copied { color: var(--green); font-size: 0.85rem; font-weight: 600; }
+  .updated-at { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+  .close-note {
+    margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; font-size: 0.85rem;
+    background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.35); color: #fcd34d;
+  }
   .load-banner {
     display: none; margin-bottom: 18px; padding: 12px 16px; border-radius: 10px;
     font-size: 0.88rem; font-weight: 600;
@@ -243,7 +248,9 @@
         <input type="text" id="allSearchBox_kk" placeholder="Search by name, email, phone, or child..." autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
         <button class="primary" id="exportBtn">⬇ Export All (CSV)</button>
         <button id="refreshBtn">⟳ Refresh</button>
+        <span class="updated-at" id="updatedAt"></span>
       </div>
+      <div class="close-note" id="allCloseNote" style="display:none;"></div>
 
       <table>
         <thead>
@@ -315,6 +322,7 @@
         <input type="text" id="searchByNamePhone_kk" placeholder="Search by parent or child name, email, or phone number..." autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
       </div>
 
+      <div class="close-note" id="searchCloseNote" style="display:none;"></div>
       <div id="searchHint" class="search-hint">Type a name, email, or phone number above to search. You can type part of a name, and first and last names in any order.</div>
 
       <table id="searchTable" style="display:none;">
@@ -331,7 +339,7 @@
         </thead>
         <tbody id="searchBody"></tbody>
       </table>
-      <div id="searchEmpty" class="empty-state" style="display:none;">No matches found.</div>
+      <div id="searchEmpty" class="empty-state" style="display:none;">No matches found, even after checking for new waivers. Try part of the name, the phone number, or the email.</div>
 
       <div class="table-footer" id="searchFooter" style="display:none;">
         <span id="searchPageInfo">Showing 0–0 of 0</span>
@@ -450,9 +458,11 @@
       if (nextEl) nextEl.disabled = shownEnd >= total;
     }
 
-    function setItems(items) {
+    function setItems(items, keepPage) {
       st.items = items;
-      st.page = 1;
+      if (!keepPage) st.page = 1;
+      var maxPage = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+      if (st.page > maxPage) st.page = maxPage;
       render();
     }
 
@@ -488,6 +498,7 @@
       var tab = el.getAttribute('data-tab');
       document.getElementById('panel-' + tab).classList.add('active');
       if (tab === 'date') applyDateFilter();
+      if (Date.now() - lastLoadedAt > 20000) loadData({ silent: true });
       if (tab === 'birthdays') applyBirthdayFilter();
     });
   });
@@ -525,7 +536,9 @@
   }
 
   // ---- Data loading ----
-  var loading = false;
+  var loading;            // no initializer: loadData may already be running
+  var lastLoadedAt = 0;   // when the list was last loaded successfully
+  var afterLoad = [];     // callbacks to run once the current load finishes
   function setBanner(kind, html) {
     var b = document.getElementById('loadBanner');
     if (!kind) { b.className = 'load-banner'; b.innerHTML = ''; return; }
@@ -535,10 +548,15 @@
     if (retry) retry.addEventListener('click', loadData);
   }
 
-  function loadData() {
+  function loadData(opts) {
+    opts = opts || {};
+    if (opts.then) afterLoad.push(opts.then);
     if (loading) return;
     loading = true;
-    setBanner('info', 'Loading waivers… search results will be complete once this finishes.');
+    // Background refreshes stay quiet unless something goes wrong.
+    if (!opts.silent || !lastLoadedAt) {
+      setBanner('info', 'Loading waivers… search results will be complete once this finishes.');
+    }
     fetch('/api/admin/list', { headers: { 'x-admin-password': pw() }, cache: 'no-store' })
       .then(function (res) {
         if (res.status === 401) {
@@ -551,6 +569,8 @@
       })
       .then(function (data) {
         loading = false;
+        lastLoadedAt = Date.now();
+        updateLoadedLabel();
         state.all = data.submissions || [];
         if (data.failed > 0) {
           setBanner('warn', data.failed + ' of ' + data.total + ' waivers could not be loaded just now, so some people may be missing. ' +
@@ -559,13 +579,16 @@
           setBanner(null);
         }
         renderStats();
-        applyAllFilter();
-        applyDateFilter();
-        applySearchFilter();
+        applyAllFilter(true);
+        applyDateFilter(true);
+        applySearchFilter(true);
         applyBirthdayFilter();
+        var cbs = afterLoad; afterLoad = [];
+        cbs.forEach(function (cb) { cb(); });
       })
       .catch(function (err) {
         loading = false;
+        afterLoad = [];
         console.error(err);
         if (err.message === 'Session expired') return;
         setBanner('warn', 'Could not load the waiver list. ' +
@@ -588,33 +611,130 @@
     document.getElementById('statAvg').textContent = all.length ? (totalChildren / all.length).toFixed(1) : '0.0';
   }
 
-  document.getElementById('refreshBtn').addEventListener('click', loadData);
+  document.getElementById('refreshBtn').addEventListener('click', function () { loadData(); });
+
+  // ---- Keep the list fresh ----
+  // The list used to load only when the page was opened, so anyone who signed
+  // a waiver while the page sat open at the front desk could not be found.
+  function updateLoadedLabel() {
+    var el = document.getElementById('updatedAt');
+    if (!lastLoadedAt) { el.textContent = ''; return; }
+    var secs = Math.round((Date.now() - lastLoadedAt) / 1000);
+    el.textContent = 'Updated ' + (secs < 10 ? 'just now' : secs < 60 ? secs + 's ago' : Math.round(secs / 60) + ' min ago');
+  }
+  setInterval(updateLoadedLabel, 10000);
+
+  var REFRESH_EVERY_MS = 60000;
+  setInterval(function () {
+    if (document.visibilityState === 'visible' && pw() && Date.now() - lastLoadedAt > REFRESH_EVERY_MS - 1000) {
+      loadData({ silent: true });
+    }
+  }, 15000);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && pw() && Date.now() - lastLoadedAt > 20000) {
+      loadData({ silent: true });
+    }
+  });
+
+  // When a search finds nobody, check for brand-new waivers before giving up.
+  var recheckTimer = null;
+  var recheckPending = false;
+  function recheckIfStale(rerun) {
+    if (Date.now() - lastLoadedAt < 5000) return false;
+    clearTimeout(recheckTimer);
+    recheckPending = true;
+    recheckTimer = setTimeout(function () {
+      loadData({ silent: true, then: function () { recheckPending = false; rerun(); } });
+      // If the load fails, stop waiting so "No matches" can show.
+      setTimeout(function () { if (!loading && recheckPending) { recheckPending = false; rerun(); } }, 15000);
+    }, 600);
+    return true;
+  }
 
   // ---- Search matching (shared by All and Search tabs) ----
   // Every word typed must appear somewhere in the waiver: parent name, child
   // names, email or phone. Word order, capitals, accents and extra spaces
   // don't matter, and phone numbers match on digits only.
+  // Apostrophes are dropped (O'Brien = OBrien) and other punctuation becomes
+  // a space (Smith-Jones = Smith Jones).
   function normalize(str) {
-    return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      .replace(/['\u2019`]/g, '').replace(/[^a-z0-9@\s]/g, ' ').replace(/\s+/g, ' ').trim();
   }
   function haystack(s) {
     if (!s._hay) {
-      var names = [s.parentName, s.parentFirstName, s.parentLastName].concat(s.children || []);
+      var names = [s.parentName, s.parentFirstName, s.parentLastName, s.printedName].concat(s.children || []);
       (s.childDetails || []).forEach(function (c) { names.push(c.firstName, c.lastName); });
-      s._hay = normalize(names.concat([s.email]).join(' '));
+      s._hay = normalize(names.join(' ') + ' ' + (s.email || ''));
+      s._compact = s._hay.replace(/\s/g, '');                     // Mary Ann = Maryann
+      s._words = s._hay.split(' ').filter(function (w) { return w.length >= 3; });
       s._digits = (s.phone || '').replace(/\D/g, '');
     }
     return s;
   }
   function matches(s, query) {
-    var words = normalize(query).split(/\s+/).filter(Boolean);
+    var words = normalize(query).split(' ').filter(Boolean);
     if (!words.length) return true;
     haystack(s);
     return words.every(function (w) {
-      if (s._hay.indexOf(w) !== -1) return true;
+      if (s._hay.indexOf(w) !== -1 || s._compact.indexOf(w) !== -1) return true;
       var d = w.replace(/\D/g, '');
       return d.length >= 3 && s._digits.indexOf(d) !== -1;
+    }) || (words.length > 1 && s._compact.indexOf(words.join('')) !== -1);
+  }
+
+  // Close matches for typos (Mohamed / Mohammed, Jon / John): each typed
+  // word must be within 1 letter (2 for long words) of a word on the waiver.
+  function editDistanceAtMost(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return false;
+    var prev = [], cur, i, j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) {
+      cur = [i];
+      var rowMin = i;
+      for (j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        if (cur[j] < rowMin) rowMin = cur[j];
+      }
+      if (rowMin > max) return false;
+      prev = cur;
+    }
+    return prev[b.length] <= max;
+  }
+  function closeMatch(s, query) {
+    var words = normalize(query).split(' ').filter(function (w) { return w.length >= 3 && !/^\d+$/.test(w); });
+    if (!words.length) return false;
+    haystack(s);
+    return words.every(function (w) {
+      var max = w.length >= 6 ? 2 : 1;
+      return s._words.some(function (hw) {
+        return editDistanceAtMost(w, hw, max) || (hw.length > w.length && editDistanceAtMost(w, hw.slice(0, w.length), max));
+      });
     });
+  }
+
+  // Runs a search: exact matches first, otherwise close matches. If nothing
+  // is found, re-checks the server for brand-new waivers and searches again.
+  function runSearch(q, view, noteId, rerun) {
+    var note = document.getElementById(noteId);
+    var exact = state.all.filter(function (s) { return matches(s, q) || phoneQueryMatches(s, q); });
+    if (exact.length || !normalize(q)) {
+      note.style.display = 'none';
+      return exact;
+    }
+    var close = state.all.filter(function (s) { return closeMatch(s, q); });
+    var checking = recheckIfStale(rerun);
+    if (close.length) {
+      note.textContent = 'No exact match for "' + q.trim() + '". Showing ' + close.length +
+        ' close match' + (close.length === 1 ? '' : 'es') + ' (check the spelling).' + (checking ? ' Checking for new waivers…' : '');
+      note.style.display = 'block';
+    } else if (checking) {
+      note.textContent = 'No match yet. Checking for new waivers…';
+      note.style.display = 'block';
+    } else {
+      note.style.display = 'none';
+    }
+    return close;
   }
   function phoneQueryMatches(s, query) {
     var d = query.replace(/\D/g, '');
@@ -622,27 +742,30 @@
   }
 
   // ---- All Submissions tab: general search ----
-  function applyAllFilter() {
+  function applyAllFilter(keepPage) {
     var q = document.getElementById('allSearchBox_kk').value;
-    var items = state.all.filter(function (s) { return matches(s, q) || phoneQueryMatches(s, q); });
-    allView.setItems(items);
+    var items = runSearch(q, allView, 'allCloseNote', function () { applyAllFilter(); });
+    document.getElementById('allEmpty').textContent = normalize(q)
+      ? (recheckPending || loading ? 'Checking for new waivers…' : 'No waivers match this search.')
+      : 'No submissions yet.';
+    allView.setItems(items, keepPage === true);
   }
-  document.getElementById('allSearchBox_kk').addEventListener('input', applyAllFilter);
+  document.getElementById('allSearchBox_kk').addEventListener('input', function () { applyAllFilter(); });
 
   // ---- By Date tab ----
   var dateInput = document.getElementById('dateInput_kk');
   dateInput.value = mtDateStr(new Date());
 
-  function applyDateFilter() {
+  function applyDateFilter(keepPage) {
     var d = dateInput.value;
     if (!d) { dateView.setItems([]); document.getElementById('dateSummary').textContent = 'Pick a date above.'; return; }
     var items = state.all.filter(function (s) { return mtDateStr(new Date(s.submittedAt)) === d; });
-    dateView.setItems(items);
+    dateView.setItems(items, keepPage === true);
     var count = items.length;
     document.getElementById('dateSummary').textContent =
       count + (count === 1 ? ' registration' : ' registrations') + ' on ' + mtDateLong(d);
   }
-  dateInput.addEventListener('change', applyDateFilter);
+  dateInput.addEventListener('change', function () { applyDateFilter(); });
 
   function shiftDate(days) {
     var d = dateInput.value ? new Date(dateInput.value + 'T12:00:00') : new Date();
@@ -660,9 +783,9 @@
   });
 
   // ---- Search tab: name or mobile number ----
-  function applySearchFilter() {
+  function applySearchFilter(keepPage) {
     var box = document.getElementById('searchByNamePhone_kk');
-    var q = box.value.trim().toLowerCase();
+    var q = box.value.trim();
     var hint = document.getElementById('searchHint');
     var table = document.getElementById('searchTable');
     var footer = document.getElementById('searchFooter');
@@ -672,6 +795,7 @@
       table.style.display = 'none';
       footer.style.display = 'none';
       document.getElementById('searchEmpty').style.display = 'none';
+      document.getElementById('searchCloseNote').style.display = 'none';
       searchView.setItems([]);
       return;
     }
@@ -680,10 +804,12 @@
     table.style.display = 'table';
     footer.style.display = 'flex';
 
-    var items = state.all.filter(function (s) { return matches(s, q) || phoneQueryMatches(s, q); });
-    searchView.setItems(items);
+    var items = runSearch(q, searchView, 'searchCloseNote', function () { applySearchFilter(); });
+    searchView.setItems(items, keepPage === true);
+    // "No matches" only once the re-check for new waivers has finished.
+    if (!items.length && (loading || recheckPending)) document.getElementById('searchEmpty').style.display = 'none';
   }
-  document.getElementById('searchByNamePhone_kk').addEventListener('input', applySearchFilter);
+  document.getElementById('searchByNamePhone_kk').addEventListener('input', function () { applySearchFilter(); });
 
   // ---- View modal ----
   function openModal(id) {
