@@ -7,7 +7,7 @@ import { MONTHS, MT_TZ, loadIndex, childDetailsOf, getJSONWithRetry } from "./wa
 
 export const TEST_EMAIL = "kidzkingdom2023@gmail.com";
 
-function env(name: string, fallback = ""): string {
+export function env(name: string, fallback = ""): string {
   return (Netlify.env.get(name) || fallback).trim();
 }
 
@@ -32,7 +32,7 @@ function smtpConfig() {
 export const BIRTHDAY_FROM = "birthdays@kidzkingdomqr.com";
 export const REPLY_TO = TEST_EMAIL; // parents' replies land in the Kidz Kingdom Gmail inbox
 
-function resendKey(): string {
+export function resendKey(): string {
   return env("RESEND_API_KEY");
 }
 
@@ -325,7 +325,7 @@ export async function birthdaysForMonth(month: number) {
 
 // ---------------- Sending ----------------
 
-function escapeHtml(s: string) {
+export function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 }
 

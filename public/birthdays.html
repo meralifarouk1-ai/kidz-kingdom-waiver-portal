@@ -199,6 +199,7 @@
     <div class="navs">
       <button class="navitem active" data-tab="send">🎂 Birthday Emails</button>
       <button class="navitem" data-tab="template">✉️ Email Template</button>
+      <a class="navitem" href="/marketing.html" style="text-decoration:none;display:flex">📣 Marketing</a>
     </div>
   </aside>
 
@@ -385,7 +386,7 @@
   $('pwInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') tryLogin(); });
 
   // ---------- tabs ----------
-  document.querySelectorAll('.navitem').forEach(function (el) {
+  document.querySelectorAll('button.navitem').forEach(function (el) {
     el.addEventListener('click', function () {
       document.querySelectorAll('.navitem').forEach(function (n) { n.classList.remove('active'); });
       el.classList.add('active');

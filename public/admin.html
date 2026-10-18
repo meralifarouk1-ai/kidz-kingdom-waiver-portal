@@ -212,6 +212,7 @@
     <div class="navitem" data-tab="date">📅 By Date</div>
     <div class="navitem" data-tab="search">🔍 Search</div>
     <div class="navitem" data-tab="birthdays">🎂 Birthdays</div>
+    <div class="navitem" data-tab="marketing">📣 Marketing</div>
   </div>
 
   <div class="content">
@@ -494,6 +495,7 @@
     el.addEventListener('click', function () {
       // Birthdays has its own page (same tab, so the login carries over).
       if (el.getAttribute('data-tab') === 'birthdays') { window.location.href = '/birthdays.html'; return; }
+      if (el.getAttribute('data-tab') === 'marketing') { window.location.href = '/marketing.html'; return; }
       navItems.forEach(function (n) { n.classList.remove('active'); });
       el.classList.add('active');
       document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
