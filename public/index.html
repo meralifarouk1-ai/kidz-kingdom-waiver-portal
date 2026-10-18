@@ -116,6 +116,7 @@
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
   @media (max-width: 480px) { .grid2 { grid-template-columns: 1fr; } }
   @media (max-width: 480px) { .grid2.keep { grid-template-columns: 1fr 1fr; } }
+  .grid3 { display: grid; grid-template-columns: 1.4fr 1fr 1.1fr; gap: 0 10px; }
 
   .clause p { font-size: 0.92rem; line-height: 1.5; color: #45385a; margin: 0 0 10px; }
   .clause ul { margin: 0 0 8px; padding-left: 0; list-style: none; }
@@ -247,7 +248,7 @@
         <input type="text" id="today" disabled>
 
         <div id="childBlocks"></div>
-        <p class="bday-note">We ask for your child's birth month and year so we can send a birthday greeting.</p>
+        <p class="bday-note">We ask for your child's birthday so we can send them a birthday greeting.</p>
       </div>
 
       <div class="card clause">
@@ -347,6 +348,9 @@
   var yearOpts = '<option value="">Year</option>';
   for (var yr = thisYear; yr >= thisYear - 18; yr--) yearOpts += '<option value="' + yr + '">' + yr + '</option>';
 
+  var dayOpts = '<option value="">Day</option>';
+  for (var dd = 1; dd <= 31; dd++) dayOpts += '<option value="' + dd + '">' + dd + '</option>';
+
   var blocksHtml = '';
   for (var c = 1; c <= 4; c++) {
     var opt = c === 1 ? '' : ' <span class="opt">(optional)</span>';
@@ -357,9 +361,10 @@
           '<div><label>First Name</label><input type="text" id="child' + c + 'First" autocomplete="off"></div>' +
           '<div><label>Last Name</label><input type="text" id="child' + c + 'Last" autocomplete="off"></div>' +
         '</div>' +
-        '<div class="grid2 keep">' +
+        '<div class="grid3">' +
           '<div><label>Birth Month</label><select id="child' + c + 'Month">' + monthOpts + '</select></div>' +
-          '<div><label>Birth Year</label><select id="child' + c + 'Year">' + yearOpts + '</select></div>' +
+          '<div><label>Day</label><select id="child' + c + 'Day">' + dayOpts + '</select></div>' +
+          '<div><label>Year</label><select id="child' + c + 'Year">' + yearOpts + '</select></div>' +
         '</div>' +
       '</div>';
   }
@@ -450,11 +455,13 @@
       var cf = document.getElementById('child' + n + 'First').value.trim();
       var cl = document.getElementById('child' + n + 'Last').value.trim();
       var cm = document.getElementById('child' + n + 'Month').value;
+      var cd = document.getElementById('child' + n + 'Day').value;
       var cy = document.getElementById('child' + n + 'Year').value;
-      if (!cf && !cl && !cm && !cy) continue;
+      if (!cf && !cl && !cm && !cd && !cy) continue;
       if (!cf || !cl) return showError('Please enter both first and last name for Child ' + n + '.');
-      if (!cm || !cy) return showError('Please choose the birth month and year for Child ' + n + '.');
-      childDetails.push({ firstName: cf, lastName: cl, birthMonth: +cm, birthYear: +cy });
+      if (!cm || !cd || !cy) return showError('Please choose the birth month, day and year for Child ' + n + '.');
+      if (+cd > new Date(+cy, +cm, 0).getDate()) return showError('Please check the birth date for Child ' + n + ': ' + MONTHS[+cm - 1] + ' doesn\'t have ' + cd + ' days.');
+      childDetails.push({ firstName: cf, lastName: cl, birthMonth: +cm, birthDay: +cd, birthYear: +cy });
     }
     if (childDetails.length === 0) return showError('Please enter at least one child.');
     if (!printedName) return showError('Please type your printed name.');

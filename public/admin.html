@@ -871,7 +871,8 @@
 
   function birthLabel(c) {
     var m = MONTHS[(c.birthMonth || 0) - 1];
-    return m && c.birthYear ? (m + ' ' + c.birthYear) : '';
+    if (!m || !c.birthYear) return '';
+    return c.birthDay ? (m + ' ' + c.birthDay + ', ' + c.birthYear) : (m + ' ' + c.birthYear);
   }
 
   function childRowsHtml(s) {

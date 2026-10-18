@@ -14,6 +14,7 @@ export type ChildDetail = {
   firstName: string;
   lastName: string;
   birthMonth: number; // 1-12
+  birthDay?: number;  // 1-31; waivers signed before Oct 18, 2026 don't have it
   birthYear: number;
 };
 
@@ -37,7 +38,8 @@ export function childFullName(c: ChildDetail): string {
 
 export function birthLabel(c: ChildDetail): string {
   const m = MONTHS[(c.birthMonth || 0) - 1];
-  return m && c.birthYear ? `${m} ${c.birthYear}` : "";
+  if (!m || !c.birthYear) return "";
+  return c.birthDay ? `${m} ${c.birthDay}, ${c.birthYear}` : `${m} ${c.birthYear}`;
 }
 
 // Index summary written for every submission (used by list / export / birthdays).

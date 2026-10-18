@@ -214,7 +214,7 @@
               <th class="check"><input type="checkbox" id="selectAll" aria-label="Select all"></th>
               <th>Child</th>
               <th>Turning</th>
-              <th>Born</th>
+              <th>Birthday</th>
               <th>Parent / Guardian</th>
               <th>Email</th>
               <th>Status</th>
@@ -224,7 +224,7 @@
         </table>
       </div>
       <div class="empty-state" id="emptyState">Choose a month and press Search.</div>
-      <p class="hint" style="margin-top:14px">Only waivers signed on the new form (from Oct 15, 2026) include a birth month. Children already emailed for this birthday are shown as <b>Sent</b> and aren't ticked again by Select All.</p>
+      <p class="hint" style="margin-top:14px">Only waivers signed from Oct 15, 2026 include a birth month, and from Oct 18, 2026 the day too. Children already emailed for this birthday are shown as <b>Sent</b> and aren't ticked again by Select All.</p>
     </section>
 
     <!-- ===== Template tab ===== -->
@@ -323,6 +323,7 @@
       child_first_name: c.childFirstName, child_last_name: c.childLastName,
       child_name: (c.childFirstName + ' ' + c.childLastName).trim(), age: String(c.age),
       age_ordinal: ordinal(c.age), birthday_month: MONTHS[c.birthMonth - 1] || '',
+      birthday: c.birthDay ? (MONTHS[c.birthMonth - 1] + ' ' + c.birthDay) : (MONTHS[c.birthMonth - 1] || ''),
       parent_first_name: c.parentFirstName || 'there', parent_name: c.parentName || c.parentFirstName || ''
     };
     return (text || '').replace(/\{([a-z_]+)\}/gi, function (m, k) { k = k.toLowerCase(); return k in v ? v[k] : m; });
@@ -330,7 +331,7 @@
   function shortDate(iso) {
     return iso ? new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/Edmonton', month: 'short', day: 'numeric' }) : '';
   }
-  var SAMPLE = { key: '', childFirstName: 'Zara', childLastName: 'Khan', birthMonth: 10, birthYear: 2019, age: 7, parentFirstName: 'Amina', parentName: 'Amina Khan' };
+  var SAMPLE = { key: '', childFirstName: 'Zara', childLastName: 'Khan', birthMonth: 10, birthDay: 14, birthYear: 2019, age: 7, parentFirstName: 'Amina', parentName: 'Amina Khan' };
 
   // ---------- login ----------
   function showLogin() { $('app').classList.remove('show'); $('loginScreen').classList.add('show'); }
@@ -426,7 +427,8 @@
           ' aria-label="Select ' + esc(c.childFirstName) + '"></td>' +
         '<td class="child-name">' + esc(c.childFirstName + ' ' + c.childLastName) + '</td>' +
         '<td><span class="age">' + c.age + '</span></td>' +
-        '<td class="muted">' + esc(MONTHS[c.birthMonth - 1].slice(0, 3) + ' ' + c.birthYear) + '</td>' +
+        '<td>' + (c.birthDay ? '<b>' + esc(MONTHS[c.birthMonth - 1].slice(0, 3) + ' ' + c.birthDay) + '</b><span class="muted">, ' + c.birthYear + '</span>'
+          : '<span class="muted" title="Signed before the form asked for the day">' + esc(MONTHS[c.birthMonth - 1].slice(0, 3)) + ' ' + c.birthYear + ' · day not given</span>') + '</td>' +
         '<td>' + esc(c.parentName) + '</td>' +
         '<td>' + (c.email ? esc(c.email) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + statusPill(c) + '</td>' +

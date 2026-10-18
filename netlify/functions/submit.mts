@@ -45,13 +45,18 @@ export default async (req: Request, context: Context) => {
       firstName: str(c?.firstName),
       lastName: str(c?.lastName),
       birthMonth: Number(c?.birthMonth),
+      // Day was added later; an older cached form may not send it.
+      ...(c?.birthDay !== undefined && c?.birthDay !== "" ? { birthDay: Number(c.birthDay) } : {}),
       birthYear: Number(c?.birthYear),
     }));
     childErrors = childDetails.some(
       (c) =>
         !c.firstName || !c.lastName ||
         !Number.isInteger(c.birthMonth) || c.birthMonth < 1 || c.birthMonth > 12 ||
-        !Number.isInteger(c.birthYear) || c.birthYear < thisYear - 25 || c.birthYear > thisYear
+        !Number.isInteger(c.birthYear) || c.birthYear < thisYear - 25 || c.birthYear > thisYear ||
+        (c.birthDay !== undefined &&
+          (!Number.isInteger(c.birthDay) || c.birthDay < 1 ||
+            c.birthDay > new Date(Date.UTC(c.birthYear, c.birthMonth, 0)).getUTCDate()))
     );
   }
 

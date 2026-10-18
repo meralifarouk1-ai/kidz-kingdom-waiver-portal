@@ -104,6 +104,7 @@ export const PLACEHOLDERS = [
   ["{age}", "Age they're turning, e.g. 7"],
   ["{age_ordinal}", "e.g. 7th"],
   ["{birthday_month}", "e.g. October"],
+  ["{birthday}", "e.g. October 14 (just the month if no day on file)"],
   ["{parent_first_name}", "Parent's first name"],
   ["{parent_name}", "Parent's full name"],
 ];
@@ -134,6 +135,7 @@ export type BirthdayChild = {
   childFirstName: string;
   childLastName: string;
   birthMonth: number;
+  birthDay: number | null;
   birthYear: number;
   birthdayYear: number; // the year of the birthday being celebrated
   age: number;
@@ -151,6 +153,7 @@ export function fillTemplate(text: string, c: BirthdayChild): string {
     age: String(c.age),
     age_ordinal: ordinal(c.age),
     birthday_month: MONTHS[c.birthMonth - 1] || "",
+    birthday: c.birthDay ? `${MONTHS[c.birthMonth - 1]} ${c.birthDay}` : MONTHS[c.birthMonth - 1] || "",
     parent_first_name: c.parentFirstName || "there",
     parent_name: c.parentName || c.parentFirstName || "",
   };
@@ -162,6 +165,7 @@ export const SAMPLE_CHILD: BirthdayChild = {
   childFirstName: "Zara",
   childLastName: "Khan",
   birthMonth: 10,
+  birthDay: 14,
   birthYear: 2019,
   birthdayYear: 2026,
   age: 7,
@@ -263,7 +267,12 @@ export async function birthdaysForMonth(month: number) {
     for (const c of childDetailsOf(item)) {
       if (Number(c.birthMonth) !== month) continue;
       const key = childKey(c.firstName, c.lastName, c.birthMonth, c.birthYear);
-      if (seen.has(key)) continue;
+      if (seen.has(key)) {
+        // An older waiver may have the day when the newest one doesn't.
+        const existing = children.find((x) => x.key === key);
+        if (existing && !existing.birthDay && c.birthDay) existing.birthDay = Number(c.birthDay);
+        continue;
+      }
       seen.add(key);
       const parentName = item.parentName || "";
       children.push({
@@ -271,6 +280,7 @@ export async function birthdaysForMonth(month: number) {
         childFirstName: c.firstName,
         childLastName: c.lastName,
         birthMonth: c.birthMonth,
+        birthDay: c.birthDay ? Number(c.birthDay) : null,
         birthYear: c.birthYear,
         birthdayYear,
         age: birthdayYear - c.birthYear,
@@ -281,8 +291,11 @@ export async function birthdaysForMonth(month: number) {
       });
     }
   }
-  children.sort((a, b) =>
-    `${a.childFirstName} ${a.childLastName}`.localeCompare(`${b.childFirstName} ${b.childLastName}`)
+  // By day of the month (children without a day on file last), then name.
+  children.sort(
+    (a, b) =>
+      (a.birthDay || 99) - (b.birthDay || 99) ||
+      `${a.childFirstName} ${a.childLastName}`.localeCompare(`${b.childFirstName} ${b.childLastName}`)
   );
   return { children, birthdayYear, failed };
 }

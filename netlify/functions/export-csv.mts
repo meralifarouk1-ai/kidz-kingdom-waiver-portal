@@ -72,26 +72,36 @@ export default async (req: Request, context: Context) => {
       for (const c of childDetailsOf(item)) {
         if (c.birthMonth !== birthMonth) continue;
         const key = [c.firstName, c.lastName, c.birthMonth, c.birthYear].join("|").toLowerCase();
-        if (seen.has(key)) continue;
+        if (seen.has(key)) {
+          const existing = rows.find((r) => r[9] === key);
+          if (existing && !existing[3] && c.birthDay) existing[3] = c.birthDay;
+          continue;
+        }
         seen.add(key);
         rows.push([
           c.firstName,
           c.lastName,
           MONTHS[c.birthMonth - 1],
+          c.birthDay || "",
           c.birthYear,
           thisYear - c.birthYear,
           item.parentFirstName || item.parentName,
           item.parentLastName,
           item.email,
           item.phone,
+          key,
         ]);
       }
     }
-    rows.sort((a, b) => `${a[0]} ${a[1]}`.localeCompare(`${b[0]} ${b[1]}`));
+    rows.sort(
+      (a: any, b: any) => (Number(a[3]) || 99) - (Number(b[3]) || 99) || `${a[0]} ${a[1]}`.localeCompare(`${b[0]} ${b[1]}`)
+    );
+    rows.forEach((r) => r.pop()); // drop the internal key column
     const header = [
       "Child First Name",
       "Child Last Name",
       "Birth Month",
+      "Birth Day",
       "Birth Year",
       `Turning (${thisYear})`,
       "Parent First Name",
