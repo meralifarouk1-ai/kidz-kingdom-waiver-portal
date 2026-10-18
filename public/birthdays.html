@@ -144,6 +144,22 @@
   .mail .foot { border-top: 1px solid #f0eaf9; padding: 12px 22px 18px; font-size: 0.75rem; color: #7a6f8c; line-height: 1.5; }
   .mail .foot u { cursor: default; }
   .unsaved { color: var(--amber); font-size: 0.85rem; font-weight: 600; }
+  .dropzone {
+    border: 2px dashed #3a4562; border-radius: 12px; background: var(--panel);
+    padding: 22px 16px; text-align: center; color: var(--muted); font-size: 0.9rem; cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .dropzone:hover, .dropzone:focus { border-color: var(--accent); outline: none; }
+  .dropzone.over { border-color: var(--accent-2); background: rgba(236, 72, 153, 0.08); color: var(--ink); }
+  .dropzone b { color: var(--ink); }
+  .dropzone .big { font-size: 1.6rem; display: block; margin-bottom: 4px; }
+  .image-set { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+  .image-set img { width: 120px; height: 80px; object-fit: cover; border-radius: 8px; background: #fff; }
+  .image-set .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .image-set select { padding: 8px 10px; }
+  .mail .pic { padding: 18px 22px 0; }
+  .mail .pic.below { padding: 0 22px 16px; }
+  .mail .pic img { display: block; width: 100%; height: auto; border-radius: 12px; }
 
   /* ---- Modal ---- */
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); align-items: center; justify-content: center; padding: 16px; z-index: 50; }
@@ -244,6 +260,22 @@
             <textarea id="tplBody"></textarea>
           </div>
           <div class="field">
+            <label>Picture <span style="text-transform:none;font-weight:600">(optional)</span></label>
+            <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Add a picture to the email"></div>
+            <div class="image-set hidden" id="imageSet">
+              <img id="imageThumb" alt="Email picture">
+              <div class="controls">
+                <select id="imagePosition" aria-label="Where the picture goes">
+                  <option value="above">Above the message</option>
+                  <option value="below">Below the message</option>
+                </select>
+                <button type="button" class="btn" id="replaceImageBtn">Replace</button>
+                <button type="button" class="btn ghost" id="removeImageBtn">Remove</button>
+              </div>
+            </div>
+            <input type="file" id="imageFile" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden">
+          </div>
+          <div class="field">
             <label for="tplFooter">Business name &amp; address (email footer)</label>
             <input type="text" id="tplFooter" maxlength="300">
           </div>
@@ -261,7 +293,9 @@
             <div class="subject">Subject: <b id="pvSubject"></b></div>
             <div class="mail">
               <div class="banner" id="pvBanner"></div>
+              <div class="pic hidden" id="pvPicAbove"><img alt=""></div>
               <div class="body" id="pvBody"></div>
+              <div class="pic below hidden" id="pvPicBelow"><img alt=""></div>
               <div class="foot"><span id="pvFooter"></span><br>You're receiving this because you registered your family at Kidz Kingdom.<br><u>Unsubscribe from these emails</u></div>
             </div>
           </div>
@@ -484,12 +518,28 @@
   });
 
   // ---------- template ----------
+  state.imageId = '';
   function currentTemplate() {
-    return { subject: $('tplSubject').value, body: $('tplBody').value, footerAddress: $('tplFooter').value };
+    return {
+      subject: $('tplSubject').value, body: $('tplBody').value, footerAddress: $('tplFooter').value,
+      imageId: state.imageId || '', imagePosition: $('imagePosition').value
+    };
   }
   function isDirty() {
     var s = state.savedTemplate, c = currentTemplate();
-    return !!s && (s.subject !== c.subject || s.body !== c.body || s.footerAddress !== c.footerAddress);
+    return !!s && (s.subject !== c.subject || s.body !== c.body || s.footerAddress !== c.footerAddress ||
+      (s.imageId || '') !== c.imageId || (!!c.imageId && (s.imagePosition || 'above') !== c.imagePosition));
+  }
+  var DROP_IDLE = '<span class="big">🖼️</span><b>Drag a picture here</b> or click to choose one<br>' +
+    '<span style="font-size:0.8rem">JPG, PNG, GIF or WebP. Large photos are shrunk automatically.</span>';
+  $('dropzone').innerHTML = DROP_IDLE;
+  function setImage(id, position) {
+    state.imageId = id || '';
+    if (position) $('imagePosition').value = position;
+    $('dropzone').classList.toggle('hidden', !!state.imageId);
+    $('imageSet').classList.toggle('hidden', !state.imageId);
+    if (state.imageId) $('imageThumb').src = '/api/email-image/' + state.imageId;
+    renderPreview();
   }
   function loadTemplate() {
     return api('/api/admin/email-template').then(function (d) {
@@ -497,6 +547,7 @@
       $('tplSubject').value = d.template.subject;
       $('tplBody').value = d.template.body;
       $('tplFooter').value = d.template.footerAddress;
+      setImage(d.template.imageId, d.template.imagePosition || 'above');
       $('chips').innerHTML = d.placeholders.map(function (p) {
         return '<button type="button" class="chip" data-ph="' + esc(p[0]) + '" title="' + esc(p[1]) + '">' + esc(p[0]) + '</button>';
       }).join('');
@@ -531,6 +582,13 @@
     $('pvBanner').textContent = '🎂 Happy Birthday, ' + c.childFirstName + '! 🎉';
     $('pvBody').innerHTML = esc(fill(t.body, c)).split(/\n{2,}/).map(function (p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('');
     $('pvFooter').textContent = t.footerAddress;
+    var src = t.imageId ? '/api/email-image/' + t.imageId : '';
+    ['pvPicAbove', 'pvPicBelow'].forEach(function (id) {
+      var show = !!src && ((id === 'pvPicAbove') === (t.imagePosition !== 'below'));
+      $(id).classList.toggle('hidden', !show);
+      var img = $(id).querySelector('img');
+      if (show && img.getAttribute('src') !== src) img.src = src;
+    });
     $('unsavedNote').classList.toggle('hidden', !isDirty());
   }
 
@@ -548,9 +606,88 @@
     $('tplSubject').value = state.defaults.subject;
     $('tplBody').value = state.defaults.body;
     $('tplFooter').value = state.defaults.footerAddress;
-    renderPreview();
+    setImage('', 'above');
     toast('Default template restored. Press Save Template to keep it.');
   });
+  // ---------- picture upload (drag & drop or click) ----------
+  var MAX_W = 1200;
+  function loadImage(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () { resolve({ img: img, url: url }); };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error('This picture format can\'t be used. Please choose a JPG or PNG (iPhone photos: share or export as JPG).'));
+      };
+      img.src = url;
+    });
+  }
+  // Shrinks big photos so emails load fast. GIFs are kept as they are (so animation survives).
+  function preparePicture(file) {
+    if (file.type === 'image/gif') {
+      if (file.size > 4 * 1024 * 1024) return Promise.reject(new Error('That GIF is over 4 MB. Please use a smaller one.'));
+      return Promise.resolve(file);
+    }
+    return loadImage(file).then(function (r) {
+      var w = r.img.naturalWidth, h = r.img.naturalHeight;
+      URL.revokeObjectURL(r.url);
+      if (w <= MAX_W && file.size <= 800 * 1024 && /^image\/(jpeg|png|webp)$/.test(file.type)) return file;
+      var scale = Math.min(1, MAX_W / w);
+      var c = document.createElement('canvas');
+      c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height); // emails don't handle transparency well
+      ctx.drawImage(r.img, 0, 0, c.width, c.height);
+      return new Promise(function (resolve) { c.toBlob(resolve, 'image/jpeg', 0.85); });
+    });
+  }
+  function uploadPicture(file) {
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { toast('Please choose a picture file (JPG, PNG, GIF or WebP).', 'err'); return; }
+    var dz = $('dropzone');
+    dz.classList.remove('hidden'); $('imageSet').classList.add('hidden');
+    dz.innerHTML = '<span class="big">⏳</span><b>Uploading picture…</b>';
+    preparePicture(file).then(function (blob) {
+      return fetch('/api/admin/email-image', {
+        method: 'POST', headers: { 'x-admin-password': pw(), 'content-type': blob.type || 'image/jpeg' }, body: blob
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (d) {
+          if (!res.ok) throw new Error(d.error || ('Upload failed (error ' + res.status + ').'));
+          return d;
+        });
+      });
+    }).then(function (d) {
+      dz.innerHTML = DROP_IDLE;
+      setImage(d.imageId);
+      toast('Picture added. Press Save Template to keep it.');
+    }).catch(function (err) {
+      dz.innerHTML = DROP_IDLE;
+      setImage(state.imageId);
+      toast(err.message, 'err');
+    });
+  }
+  $('dropzone').addEventListener('click', function () { $('imageFile').click(); });
+  $('dropzone').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('imageFile').click(); }
+  });
+  $('replaceImageBtn').addEventListener('click', function () { $('imageFile').click(); });
+  $('removeImageBtn').addEventListener('click', function () {
+    setImage(''); toast('Picture removed. Press Save Template to keep this change.');
+  });
+  $('imagePosition').addEventListener('change', renderPreview);
+  $('imageFile').addEventListener('change', function () { uploadPicture(this.files[0]); this.value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    $('dropzone').addEventListener(ev, function (e) { e.preventDefault(); $('dropzone').classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    $('dropzone').addEventListener(ev, function (e) { e.preventDefault(); $('dropzone').classList.remove('over'); });
+  });
+  $('dropzone').addEventListener('drop', function (e) {
+    uploadPicture(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+  });
+  // A picture dropped anywhere else on the page shouldn't open it in the browser.
+  ['dragover', 'drop'].forEach(function (ev) { window.addEventListener(ev, function (e) { e.preventDefault(); }); });
+
   window.addEventListener('beforeunload', function (e) {
     if (isDirty() || state.sending) { e.preventDefault(); e.returnValue = ''; }
   });

@@ -80,7 +80,27 @@ function getTransport() {
 
 // ---------------- Template ----------------
 
-export type EmailTemplate = { subject: string; body: string; footerAddress: string };
+export type EmailTemplate = {
+  subject: string;
+  body: string;
+  footerAddress: string;
+  imageId?: string; // picture uploaded on the Email Template tab (served by /api/email-image/<id>)
+  imagePosition?: "above" | "below"; // relative to the message
+};
+
+export const IMAGE_ID_RE = /^[a-f0-9]{32}$/;
+
+export function imageUrl(siteUrl: string, imageId?: string): string {
+  return imageId && IMAGE_ID_RE.test(imageId) ? `${siteUrl}/api/email-image/${imageId}` : "";
+}
+
+export function normalizeImageFields(src: any): Pick<EmailTemplate, "imageId" | "imagePosition"> {
+  const id = (src?.imageId ?? "").toString();
+  return {
+    imageId: IMAGE_ID_RE.test(id) ? id : "",
+    imagePosition: src?.imagePosition === "below" ? "below" : "above",
+  };
+}
 
 export const DEFAULT_TEMPLATE: EmailTemplate = {
   subject: "Happy Birthday, {child_first_name}! 🎉",
@@ -95,6 +115,8 @@ export const DEFAULT_TEMPLATE: EmailTemplate = {
     "The Kidz Kingdom Team",
   ].join("\n"),
   footerAddress: "Kidz Kingdom INC, Southgate Centre, Edmonton, Alberta, Canada",
+  imageId: "",
+  imagePosition: "above",
 };
 
 export const PLACEHOLDERS = [
@@ -117,6 +139,7 @@ export async function loadTemplate(): Promise<EmailTemplate> {
     subject: saved?.subject ?? DEFAULT_TEMPLATE.subject,
     body: saved?.body ?? DEFAULT_TEMPLATE.body,
     footerAddress: saved?.footerAddress ?? DEFAULT_TEMPLATE.footerAddress,
+    ...normalizeImageFields(saved),
   };
 }
 
@@ -306,7 +329,7 @@ function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 }
 
-export function buildEmail(t: EmailTemplate, c: BirthdayChild, unsubscribeLink: string, isTest = false) {
+export function buildEmail(t: EmailTemplate, c: BirthdayChild, unsubscribeLink: string, isTest = false, siteUrl = "") {
   const subject = (isTest ? "[TEST] " : "") + fillTemplate(t.subject, c).replace(/[\r\n]+/g, " ").trim();
   const body = fillTemplate(t.body, c);
   const footer =
@@ -319,11 +342,17 @@ export function buildEmail(t: EmailTemplate, c: BirthdayChild, unsubscribeLink: 
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:0 0 14px">${p.replace(/\n/g, "<br>")}</p>`)
     .join("");
+  const img = imageUrl(siteUrl, t.imageId);
+  const imageRow = img
+    ? `<tr><td style="padding:${t.imagePosition === "below" ? "0 26px 18px" : "22px 26px 0"}"><img src="${escapeHtml(img)}" alt="Kidz Kingdom" width="508" style="display:block;width:100%;max-width:508px;height:auto;border:0;border-radius:12px"></td></tr>`
+    : "";
   const html = `<!doctype html><html><body style="margin:0;background:#faf7ff;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#2a1a3d">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf7ff;padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:18px;border:1px solid #e7ddf7">
 <tr><td style="background:linear-gradient(135deg,#7c3aed,#ec4899);border-radius:18px 18px 0 0;padding:26px 24px;text-align:center;color:#ffffff;font-size:22px;font-weight:700">🎂 Happy Birthday, ${escapeHtml(c.childFirstName)}! 🎉</td></tr>
+${t.imagePosition === "below" ? "" : imageRow}
 <tr><td style="padding:26px 26px 10px;font-size:16px;line-height:1.55">${paragraphs}</td></tr>
+${t.imagePosition === "below" ? imageRow : ""}
 <tr><td style="padding:14px 26px 24px;border-top:1px solid #f0eaf9;font-size:12px;line-height:1.5;color:#7a6f8c">
 ${escapeHtml(t.footerAddress)}<br>You're receiving this because you registered your family at Kidz Kingdom.<br>
 <a href="${escapeHtml(unsubscribeLink)}" style="color:#7a6f8c">Unsubscribe from these emails</a></td></tr>

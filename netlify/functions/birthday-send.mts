@@ -15,6 +15,7 @@ import {
   siteUrlFrom,
   SAMPLE_CHILD,
   TEST_EMAIL,
+  normalizeImageFields,
   type EmailTemplate,
 } from "../lib/email.mts";
 
@@ -77,10 +78,11 @@ export default async (req: Request, context: Context) => {
       subject: (body.template?.subject ?? saved.subject).toString(),
       body: (body.template?.body ?? saved.body).toString(),
       footerAddress: (body.template?.footerAddress ?? saved.footerAddress).toString(),
+      ...normalizeImageFields(body.template ?? saved),
     };
     const unsub = unsubscribeUrl(siteUrl, TEST_EMAIL);
     try {
-      await sendEmail(TEST_EMAIL, buildEmail(t, child, unsub, true), unsub);
+      await sendEmail(TEST_EMAIL, buildEmail(t, child, unsub, true, siteUrl), unsub);
       return json({ success: true, to: TEST_EMAIL, filledFor: `${child.childFirstName} ${child.childLastName}` });
     } catch (err) {
       console.error("test send failed", err);
@@ -111,7 +113,7 @@ export default async (req: Request, context: Context) => {
 
     const unsub = unsubscribeUrl(siteUrl, c.email);
     try {
-      await sendEmail(c.email, buildEmail(template, c, unsub), unsub);
+      await sendEmail(c.email, buildEmail(template, c, unsub, false, siteUrl), unsub);
       await markSent(c).catch((e) => console.error("markSent failed", key, e));
       results.push({ key, result: "sent", sentAt: new Date().toISOString() });
     } catch (err) {
