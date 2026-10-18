@@ -1,5 +1,5 @@
 import type { Context, Config } from "@netlify/functions";
-import { getStore } from "@netlify/blobs";
+import { stores, getJSONWithRetry } from "../lib/waiver.mts";
 
 function isAuthorized(req: Request): boolean {
   const expected = Netlify.env.get("ADMIN_PASSWORD") || "";
@@ -22,8 +22,12 @@ export default async (req: Request, context: Context) => {
     return new Response(JSON.stringify({ error: "Missing id" }), { status: 400 });
   }
 
-  const submissionsStore = getStore("waiver-submissions");
-  const record = await submissionsStore.get(id, { type: "json" });
+  let record: any;
+  try {
+    record = await getJSONWithRetry(stores().submissions, id);
+  } catch {
+    return new Response(JSON.stringify({ error: "Could not load this waiver. Please try again." }), { status: 503 });
+  }
 
   if (!record) {
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });

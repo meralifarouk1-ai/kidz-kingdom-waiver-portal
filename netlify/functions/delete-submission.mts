@@ -1,5 +1,5 @@
 import type { Context, Config } from "@netlify/functions";
-import { getStore } from "@netlify/blobs";
+import { stores } from "../lib/waiver.mts";
 
 function isAuthorized(req: Request): boolean {
   const expected = Netlify.env.get("ADMIN_PASSWORD") || "";
@@ -22,11 +22,10 @@ export default async (req: Request, context: Context) => {
     return new Response(JSON.stringify({ error: "Missing id" }), { status: 400 });
   }
 
-  const submissionsStore = getStore("waiver-submissions");
-  await submissionsStore.delete(id);
-
-  const indexStore = getStore("waiver-index");
-  await indexStore.delete(id);
+  const s = stores();
+  await s.submissions.delete(id);
+  await s.index.delete(id);
+  // The cached list drops deleted waivers on its own next load.
 
   return new Response(JSON.stringify({ success: true }), {
     status: 200,

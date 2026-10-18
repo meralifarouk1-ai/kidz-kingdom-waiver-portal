@@ -1,6 +1,6 @@
 import type { Context, Config } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
-import { buildSummary } from "../lib/waiver.mts";
+import { buildSummary, clearIndexCache } from "../lib/waiver.mts";
 
 function isAuthorized(req: Request): boolean {
   const expected = Netlify.env.get("ADMIN_PASSWORD") || "";
@@ -56,6 +56,7 @@ export default async (req: Request, context: Context) => {
   try {
     await indexStore.delete("index");
   } catch {}
+  await clearIndexCache();
 
   return new Response(
     JSON.stringify({

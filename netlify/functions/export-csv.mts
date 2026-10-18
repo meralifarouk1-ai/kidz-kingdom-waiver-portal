@@ -1,5 +1,4 @@
 import type { Context, Config } from "@netlify/functions";
-import { getStore } from "@netlify/blobs";
 import {
   MT_TZ,
   MONTHS,
@@ -46,7 +45,21 @@ export default async (req: Request, context: Context) => {
   const dateFilter = url.searchParams.get("date") || "";
   const birthMonth = Number(url.searchParams.get("birthMonth") || 0);
 
-  let index = await loadIndex(getStore("waiver-index"));
+  let loaded;
+  try {
+    loaded = await loadIndex();
+  } catch (err) {
+    console.error("export: load failed", err);
+    loaded = null;
+  }
+  if (!loaded || loaded.failed > 0) {
+    // Never hand out a partial export as if it were complete.
+    return new Response(
+      JSON.stringify({ error: "Some waivers could not be loaded. Please try the export again." }),
+      { status: 503, headers: { "content-type": "application/json" } }
+    );
+  }
+  let index = loaded.entries;
 
   // ---- Birthday list: one row per child born in the chosen month ----
   if (birthMonth >= 1 && birthMonth <= 12) {

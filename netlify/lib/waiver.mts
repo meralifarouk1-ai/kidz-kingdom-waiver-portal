@@ -1,3 +1,5 @@
+import { getStore } from "@netlify/blobs";
+
 // Shared helpers for the waiver functions. Lives outside netlify/functions so
 // it is bundled into each function rather than deployed as its own endpoint.
 
@@ -60,22 +62,149 @@ export function isAuthorized(req: Request): boolean {
   return Boolean(expected) && provided === expected;
 }
 
-// Reads every per-submission index entry, newest first.
-export async function loadIndex(indexStore: any): Promise<any[]> {
-  const { blobs } = await indexStore.list();
-  const index: any[] = [];
-  const BATCH_SIZE = 150;
-  for (let i = 0; i < blobs.length; i += BATCH_SIZE) {
-    const batch = blobs.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map(({ key }: any) => indexStore.get(key, { type: "json" }).catch(() => null))
-    );
-    for (const entry of results) {
-      if (entry && (entry as any).id) index.push(entry);
+// ---------------- Loading the waiver list ----------------
+//
+// The submissions store ("waiver-submissions") is the source of truth: one
+// full record per waiver. "waiver-index" holds a small summary per waiver.
+// Reading hundreds of summaries one by one is slow and some reads get
+// throttled, so:
+//   * every read is retried, and a read that still fails is reported, never
+//     silently dropped;
+//   * a combined snapshot of all summaries is cached, so a normal load only
+//     reads the waivers added since the last load;
+//   * a waiver with no summary (e.g. the summary write failed) is rebuilt
+//     from its full record and its summary repaired;
+//   * strong consistency, so a waiver shows up as soon as it's submitted.
+
+const STRONG = { consistency: "strong" as const };
+
+export function stores() {
+  return {
+    submissions: getStore({ name: "waiver-submissions", ...STRONG }),
+    index: getStore({ name: "waiver-index", ...STRONG }),
+    cache: getStore({ name: "waiver-index-cache", ...STRONG }),
+  };
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Retries a read with backoff. Gives up early if `deadline` (epoch ms) would
+// be passed, so a function never runs into Netlify's time limit.
+export async function getJSONWithRetry(
+  store: any,
+  key: string,
+  tries = 5,
+  deadline = Number.POSITIVE_INFINITY
+): Promise<any> {
+  let lastErr: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await store.get(key, { type: "json" });
+    } catch (err) {
+      lastErr = err;
+      const wait = 200 * 2 ** i + Math.random() * 200;
+      if (i === tries - 1 || Date.now() + wait > deadline) break;
+      await sleep(wait);
     }
   }
-  index.sort((a, b) => (a.submittedAt < b.submittedAt ? 1 : -1));
-  return index;
+  throw lastErr;
+}
+
+async function listKeys(store: any): Promise<string[]> {
+  let lastErr: unknown;
+  for (let i = 0; i < 4; i++) {
+    try {
+      const { blobs } = await store.list();
+      return blobs.map((b: any) => b.key);
+    } catch (err) {
+      lastErr = err;
+      await sleep(300 * 2 ** i);
+    }
+  }
+  throw lastErr;
+}
+
+async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>) {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await fn(item);
+    }
+  });
+  await Promise.all(workers);
+}
+
+export type IndexLoad = { entries: any[]; total: number; failed: number };
+
+// Returns every waiver summary, newest first. `failed` counts waivers that
+// could not be read even after retries; callers must not treat a load with
+// failed > 0 as complete.
+export async function loadIndex(budgetMs = 8000): Promise<IndexLoad> {
+  const deadline = Date.now() + budgetMs;
+  const s = stores();
+  const [subKeys, idxKeys, snapshot] = await Promise.all([
+    listKeys(s.submissions),
+    listKeys(s.index),
+    getJSONWithRetry(s.cache, "snapshot", 3, deadline).catch(() => null),
+  ]);
+
+  const submissionIds = new Set(subKeys);
+  const indexIds = new Set(idxKeys);
+  const byId = new Map<string, any>();
+
+  // 1. Cached summaries (dropping any whose waiver has since been deleted).
+  let staleInCache = false;
+  for (const e of snapshot?.entries || []) {
+    if (e && submissionIds.has(e.id)) byId.set(e.id, e);
+    else staleInCache = true;
+  }
+
+  const failedIds = new Set<string>();
+
+  // 2. Summaries added since the snapshot was built.
+  const newIndexIds = subKeys.filter((id) => !byId.has(id) && indexIds.has(id));
+  await mapLimit(newIndexIds, 20, async (id) => {
+    if (Date.now() > deadline) return void failedIds.add(id);
+    try {
+      const e = await getJSONWithRetry(s.index, id, 5, deadline);
+      if (e && e.id) byId.set(e.id, e);
+    } catch {
+      failedIds.add(id);
+    }
+  });
+
+  // 3. Waivers with no usable summary: rebuild from the full record.
+  const orphanIds = subKeys.filter((id) => !byId.has(id) && !failedIds.has(id));
+  await mapLimit(orphanIds, 8, async (id) => {
+    if (Date.now() > deadline) return void failedIds.add(id);
+    try {
+      const record = await getJSONWithRetry(s.submissions, id, 5, deadline);
+      if (!record || !record.id) return;
+      const summary = buildSummary(record);
+      byId.set(record.id, summary);
+      await s.index.setJSON(record.id, summary).catch(() => {});
+    } catch {
+      failedIds.add(id);
+    }
+  });
+
+  const entries = [...byId.values()].sort((a, b) => (a.submittedAt < b.submittedAt ? 1 : -1));
+
+  // Save whatever was read, even if some reads failed: the cache only holds
+  // valid summaries, and anything missing is simply read again next time.
+  const changed = staleInCache || newIndexIds.length > 0 || orphanIds.length > 0 || !snapshot;
+  if (changed && entries.length > 0) {
+    await s.cache
+      .setJSON("snapshot", { builtAt: new Date().toISOString(), entries })
+      .catch(() => {});
+  }
+
+  return { entries, total: submissionIds.size, failed: failedIds.size };
+}
+
+export async function clearIndexCache() {
+  await stores().cache.delete("snapshot").catch(() => {});
 }
 
 // ---------------- Waiver wording, by version ----------------

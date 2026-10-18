@@ -1,7 +1,6 @@
 import type { Context, Config } from "@netlify/functions";
-import { getStore } from "@netlify/blobs";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { wordingFor, waiverVersionOf, childDetailsOf, birthLabel } from "../lib/waiver.mts";
+import { wordingFor, waiverVersionOf, childDetailsOf, birthLabel, stores, getJSONWithRetry } from "../lib/waiver.mts";
 
 const MT_TZ = "America/Edmonton";
 
@@ -46,8 +45,12 @@ export default async (req: Request, context: Context) => {
     return new Response(JSON.stringify({ error: "Missing id" }), { status: 400 });
   }
 
-  const submissionsStore = getStore("waiver-submissions");
-  const record: any = await submissionsStore.get(id, { type: "json" });
+  let record: any;
+  try {
+    record = await getJSONWithRetry(stores().submissions, id);
+  } catch {
+    return new Response(JSON.stringify({ error: "Could not load this waiver. Please try again." }), { status: 503 });
+  }
 
   if (!record) {
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });

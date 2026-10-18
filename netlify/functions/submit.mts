@@ -107,6 +107,9 @@ export default async (req: Request, context: Context) => {
     signature,
   };
 
+  // The full record is what matters: if this fails the parent sees an error
+  // and can resubmit. The summary below is a convenience; if it fails the
+  // admin list rebuilds it from the full record.
   const submissionsStore = getStore("waiver-submissions");
   await submissionsStore.setJSON(id, record);
 
@@ -116,7 +119,11 @@ export default async (req: Request, context: Context) => {
   // mutable state to read-modify-write, so concurrent submissions never
   // contend with each other and this write is always O(1).
   const indexStore = getStore("waiver-index");
-  await indexStore.setJSON(id, summary);
+  try {
+    await indexStore.setJSON(id, summary);
+  } catch (err) {
+    console.error("submit: summary write failed (record saved)", id, err);
+  }
 
   return new Response(JSON.stringify({ success: true, id }), {
     status: 200,

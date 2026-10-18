@@ -132,6 +132,17 @@
   }
   .bday-note { color: var(--muted); font-size: 0.8rem; margin-top: 12px; line-height: 1.5; }
   .copied { color: var(--green); font-size: 0.85rem; font-weight: 600; }
+  .load-banner {
+    display: none; margin-bottom: 18px; padding: 12px 16px; border-radius: 10px;
+    font-size: 0.88rem; font-weight: 600;
+  }
+  .load-banner.show { display: block; }
+  .load-banner.info { background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.35); color: #d8b4fe; }
+  .load-banner.warn { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; }
+  .load-banner button {
+    margin-left: 10px; padding: 5px 12px; border-radius: 8px; border: 1px solid currentColor;
+    background: transparent; color: inherit; font-weight: 700; cursor: pointer;
+  }
   .search-hint { text-align: center; padding: 50px 20px; color: var(--muted); }
 
   table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: var(--radius); overflow: hidden; }
@@ -199,6 +210,7 @@
   </div>
 
   <div class="content">
+    <div class="load-banner" id="loadBanner"></div>
 
     <!-- ===== Tab: All Submissions ===== -->
     <div class="panel active" id="panel-all">
@@ -300,10 +312,10 @@
       <h1>Search Submissions</h1>
 
       <div class="toolbar">
-        <input type="text" id="searchByNamePhone_kk" placeholder="Search by parent or child name, or mobile number..." autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
+        <input type="text" id="searchByNamePhone_kk" placeholder="Search by parent or child name, email, or phone number..." autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
       </div>
 
-      <div id="searchHint" class="search-hint">Type a name or mobile number above to search.</div>
+      <div id="searchHint" class="search-hint">Type a name, email, or phone number above to search. You can type part of a name, and first and last names in any order.</div>
 
       <table id="searchTable" style="display:none;">
         <thead>
@@ -513,25 +525,53 @@
   }
 
   // ---- Data loading ----
+  var loading = false;
+  function setBanner(kind, html) {
+    var b = document.getElementById('loadBanner');
+    if (!kind) { b.className = 'load-banner'; b.innerHTML = ''; return; }
+    b.className = 'load-banner show ' + kind;
+    b.innerHTML = html;
+    var retry = document.getElementById('bannerRetry');
+    if (retry) retry.addEventListener('click', loadData);
+  }
+
   function loadData() {
-    fetch('/api/admin/list', { headers: { 'x-admin-password': pw() } })
+    if (loading) return;
+    loading = true;
+    setBanner('info', 'Loading waivers… search results will be complete once this finishes.');
+    fetch('/api/admin/list', { headers: { 'x-admin-password': pw() }, cache: 'no-store' })
       .then(function (res) {
         if (res.status === 401) {
           sessionStorage.removeItem('kk_admin_pw');
           location.reload();
           throw new Error('Session expired');
         }
+        if (!res.ok) throw new Error('load failed');
         return res.json();
       })
       .then(function (data) {
+        loading = false;
         state.all = data.submissions || [];
+        if (data.failed > 0) {
+          setBanner('warn', data.failed + ' of ' + data.total + ' waivers could not be loaded just now, so some people may be missing. ' +
+            '<button id="bannerRetry">Try again</button>');
+        } else {
+          setBanner(null);
+        }
         renderStats();
         applyAllFilter();
         applyDateFilter();
         applySearchFilter();
         applyBirthdayFilter();
       })
-      .catch(function (err) { console.error(err); });
+      .catch(function (err) {
+        loading = false;
+        console.error(err);
+        if (err.message === 'Session expired') return;
+        setBanner('warn', 'Could not load the waiver list. ' +
+          (state.all.length ? 'You are seeing the last list that loaded, which may be out of date. ' : '') +
+          '<button id="bannerRetry">Try again</button>');
+      });
   }
 
   function renderStats() {
@@ -550,13 +590,41 @@
 
   document.getElementById('refreshBtn').addEventListener('click', loadData);
 
+  // ---- Search matching (shared by All and Search tabs) ----
+  // Every word typed must appear somewhere in the waiver: parent name, child
+  // names, email or phone. Word order, capitals, accents and extra spaces
+  // don't matter, and phone numbers match on digits only.
+  function normalize(str) {
+    return (str || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+  function haystack(s) {
+    if (!s._hay) {
+      var names = [s.parentName, s.parentFirstName, s.parentLastName].concat(s.children || []);
+      (s.childDetails || []).forEach(function (c) { names.push(c.firstName, c.lastName); });
+      s._hay = normalize(names.concat([s.email]).join(' '));
+      s._digits = (s.phone || '').replace(/\D/g, '');
+    }
+    return s;
+  }
+  function matches(s, query) {
+    var words = normalize(query).split(/\s+/).filter(Boolean);
+    if (!words.length) return true;
+    haystack(s);
+    return words.every(function (w) {
+      if (s._hay.indexOf(w) !== -1) return true;
+      var d = w.replace(/\D/g, '');
+      return d.length >= 3 && s._digits.indexOf(d) !== -1;
+    });
+  }
+  function phoneQueryMatches(s, query) {
+    var d = query.replace(/\D/g, '');
+    return d.length >= 3 && haystack(s)._digits.indexOf(d) !== -1;
+  }
+
   // ---- All Submissions tab: general search ----
   function applyAllFilter() {
-    var q = document.getElementById('allSearchBox_kk').value.trim().toLowerCase();
-    var items = !q ? state.all.slice() : state.all.filter(function (s) {
-      var hay = [s.parentName, s.email, s.phone].concat(s.children || []).join(' ').toLowerCase();
-      return hay.indexOf(q) !== -1;
-    });
+    var q = document.getElementById('allSearchBox_kk').value;
+    var items = state.all.filter(function (s) { return matches(s, q) || phoneQueryMatches(s, q); });
     allView.setItems(items);
   }
   document.getElementById('allSearchBox_kk').addEventListener('input', applyAllFilter);
@@ -612,15 +680,7 @@
     table.style.display = 'table';
     footer.style.display = 'flex';
 
-    var digitsOnly = q.replace(/\D/g, '');
-    var items = state.all.filter(function (s) {
-      var name = [s.parentName].concat(s.children || []).join(' ').toLowerCase();
-      var phone = (s.phone || '');
-      var phoneDigits = phone.replace(/\D/g, '');
-      var nameMatch = name.indexOf(q) !== -1;
-      var phoneMatch = digitsOnly && phoneDigits.indexOf(digitsOnly) !== -1;
-      return nameMatch || phoneMatch;
-    });
+    var items = state.all.filter(function (s) { return matches(s, q) || phoneQueryMatches(s, q); });
     searchView.setItems(items);
   }
   document.getElementById('searchByNamePhone_kk').addEventListener('input', applySearchFilter);
