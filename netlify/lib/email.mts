@@ -25,8 +25,38 @@ function smtpConfig() {
   };
 }
 
+// Two ways to send:
+//  * Resend (preferred): set RESEND_API_KEY. Emails come from
+//    birthdays@kidzkingdomqr.com once that domain is verified in Resend.
+//  * Gmail SMTP (fallback): set SMTP_PASS to a Gmail app password.
+export const BIRTHDAY_FROM = "birthdays@kidzkingdomqr.com";
+export const REPLY_TO = TEST_EMAIL; // parents' replies land in the Kidz Kingdom Gmail inbox
+
+function resendKey(): string {
+  return env("RESEND_API_KEY");
+}
+
+export function emailProvider(): "resend" | "gmail" | null {
+  if (resendKey()) return "resend";
+  if (smtpConfig().pass) return "gmail";
+  return null;
+}
+
 export function emailConfigured(): boolean {
-  return Boolean(smtpConfig().pass);
+  return emailProvider() !== null;
+}
+
+export function senderAddress(): string {
+  return emailProvider() === "resend" ? env("EMAIL_FROM", BIRTHDAY_FROM) : smtpConfig().fromAddress;
+}
+
+// Error with a message staff can act on.
+export class SendError extends Error {
+  stopAll: boolean;
+  constructor(message: string, stopAll = false) {
+    super(message);
+    this.stopAll = stopAll;
+  }
 }
 
 let transport: any = null;
@@ -288,12 +318,60 @@ ${escapeHtml(t.footerAddress)}<br>You're receiving this because you registered y
   return { subject, text, html };
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function sendWithResend(to: string, msg: { subject: string; text: string; html: string }, unsubscribeLink: string) {
+  const fromName = env("EMAIL_FROM_NAME", "Kidz Kingdom");
+  const payload = {
+    from: `${fromName} <${senderAddress()}>`,
+    to: [to],
+    reply_to: [env("EMAIL_REPLY_TO", REPLY_TO)],
+    subject: msg.subject,
+    text: msg.text,
+    html: msg.html,
+    headers: {
+      "List-Unsubscribe": `<${unsubscribeLink}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+  };
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${resendKey()}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) return;
+    const data: any = await res.json().catch(() => ({}));
+    const detail = `${data?.name || ""} ${data?.message || ""}`.trim();
+    console.error("resend error", res.status, detail);
+    if (res.status === 401 || /api key/i.test(detail)) {
+      throw new SendError("Resend rejected the API key. Check RESEND_API_KEY in Netlify.", true);
+    }
+    if (res.status === 403 || /not verified|verify/i.test(detail)) {
+      throw new SendError(
+        "The kidzkingdomqr.com domain isn't verified in Resend yet. Finish the DNS step in Resend, then try again.",
+        true
+      );
+    }
+    if (/daily|quota|monthly/i.test(detail)) {
+      throw new SendError("Resend's sending limit was reached (free plan: 100 a day). Send the rest tomorrow.", true);
+    }
+    if (res.status === 429 || res.status >= 500) {
+      await sleep(600 * 2 ** attempt);
+      continue;
+    }
+    throw new SendError(detail ? `Resend couldn't send this email: ${detail}` : "Sending failed. Please try again.");
+  }
+  throw new SendError("Resend is busy right now. Please try again in a minute.");
+}
+
 export async function sendEmail(to: string, msg: { subject: string; text: string; html: string }, unsubscribeLink: string) {
+  if (emailProvider() === "resend") return sendWithResend(to, msg, unsubscribeLink);
   const c = smtpConfig();
   await getTransport().sendMail({
     from: { name: c.fromName, address: c.fromAddress },
     to,
-    replyTo: c.fromAddress,
+    replyTo: env("EMAIL_REPLY_TO", c.fromAddress),
     subject: msg.subject,
     text: msg.text,
     html: msg.html,

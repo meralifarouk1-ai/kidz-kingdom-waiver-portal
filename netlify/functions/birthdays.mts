@@ -6,6 +6,8 @@ import {
   optedOutHashes,
   emailHash,
   emailConfigured,
+  emailProvider,
+  senderAddress,
   TEST_EMAIL,
 } from "../lib/email.mts";
 
@@ -45,6 +47,8 @@ export default async (req: Request, context: Context) => {
       children: rows,
       failed,
       emailConfigured: emailConfigured(),
+      provider: emailProvider(),
+      sender: emailConfigured() ? senderAddress() : null,
       testEmail: TEST_EMAIL,
     });
   } catch (err) {

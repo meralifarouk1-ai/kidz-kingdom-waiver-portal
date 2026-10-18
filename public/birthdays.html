@@ -188,8 +188,8 @@
 
   <main class="content">
     <div class="notice warn hidden" id="setupNotice">
-      <b>Email isn't switched on yet.</b> You can search and pick children, but nothing can be sent until the Gmail app password
-      for kidzkingdom2023@gmail.com is added in Netlify as <code>SMTP_PASS</code>.
+      <b>Email isn't switched on yet.</b> You can search and pick children, but nothing can be sent until the Resend API key
+      is added in Netlify as <code>RESEND_API_KEY</code>. Emails will come from birthdays@kidzkingdomqr.com.
     </div>
 
     <!-- ===== Send tab ===== -->
@@ -204,6 +204,7 @@
       </div>
 
       <div class="notice err hidden" id="loadError"></div>
+      <p class="hint hidden" id="senderLine"></p>
       <div class="summary hidden" id="summary"></div>
 
       <div class="table-wrap hidden" id="tableWrap">
@@ -377,6 +378,10 @@
       state.month = d.month; state.year = d.birthdayYear; state.children = d.children;
       state.emailConfigured = d.emailConfigured; state.selected = {};
       $('setupNotice').classList.toggle('hidden', d.emailConfigured);
+      if (d.sender) {
+        $('senderLine').innerHTML = 'Emails are sent from <b>' + esc(d.sender) + '</b>. Replies from parents go to ' + TEST_EMAIL + '.';
+        $('senderLine').classList.remove('hidden');
+      }
       if (d.failed > 0) {
         $('loadError').textContent = d.failed + ' waivers could not be read just now, so some children may be missing. Press Search again.';
         $('loadError').classList.remove('hidden');
@@ -550,7 +555,7 @@
 
   // ---------- test email ----------
   function sendTest(btn) {
-    if (!state.emailConfigured) { toast('Email isn\'t switched on yet (SMTP_PASS missing in Netlify).', 'err'); return; }
+    if (!state.emailConfigured) { toast('Email isn\'t switched on yet (RESEND_API_KEY missing in Netlify).', 'err'); return; }
     var c = previewChild();
     var original = btn.textContent;
     btn.disabled = true; btn.textContent = 'Sending test…';
@@ -574,7 +579,7 @@
   $('sendBtn').addEventListener('click', function () {
     var list = selectedChildren();
     if (!list.length) return;
-    if (!state.emailConfigured) { toast('Email isn\'t switched on yet (SMTP_PASS missing in Netlify).', 'err'); return; }
+    if (!state.emailConfigured) { toast('Email isn\'t switched on yet (RESEND_API_KEY missing in Netlify).', 'err'); return; }
     var resend = list.filter(function (c) { return c.status === 'sent'; }).length;
     var dirty = isDirty();
     var first = list[0];
@@ -633,7 +638,7 @@
               delete state.selected[c.key];
             } else {
               c.status = 'failed'; c.reason = r.reason; failures.push({ c: c, reason: r.reason });
-              if (/rejected the login|daily sending limit/.test(r.reason)) stopReason = r.reason;
+              if (/rejected the|daily sending limit|sending limit was reached|isn't verified/.test(r.reason)) stopReason = r.reason;
             }
           });
         }).catch(function (err) {

@@ -6,6 +6,7 @@ import {
   optedOutHashes,
   emailHash,
   emailConfigured,
+  SendError,
   loadTemplate,
   buildEmail,
   sendEmail,
@@ -27,6 +28,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_PER_REQUEST = 5; // keeps each call well inside the function time limit
 
 function friendlyError(err: any): string {
+  if (err instanceof SendError) return err.message;
   const msg = (err?.response || err?.message || "").toString();
   if (/Invalid login|Username and Password not accepted|535/i.test(msg)) {
     return "Gmail rejected the login. Check the app password saved as SMTP_PASS in Netlify.";
@@ -50,7 +52,7 @@ export default async (req: Request, context: Context) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   if (!isAuthorized(req)) return json({ error: "Unauthorized" }, 401);
   if (!emailConfigured()) {
-    return json({ error: "Email isn't set up yet: add the Gmail app password as SMTP_PASS in Netlify." }, 503);
+    return json({ error: "Email isn't set up yet: add RESEND_API_KEY in Netlify." }, 503);
   }
 
   let body: any;
@@ -116,8 +118,8 @@ export default async (req: Request, context: Context) => {
       console.error("send failed", key, err);
       const reason = friendlyError(err);
       results.push({ key, result: "failed", reason });
-      // A login or quota problem will fail every remaining email too.
-      if (/rejected the login|daily sending limit/.test(reason)) {
+      // A login, domain or quota problem will fail every remaining email too.
+      if ((err instanceof SendError && err.stopAll) || /rejected the login|daily sending limit/.test(reason)) {
         for (const rest of keys.slice(keys.indexOf(key) + 1)) results.push({ key: rest, result: "failed", reason });
         break;
       }
