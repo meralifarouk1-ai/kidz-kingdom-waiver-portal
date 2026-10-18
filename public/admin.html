@@ -492,6 +492,8 @@
   var navItems = document.querySelectorAll('.navitem');
   navItems.forEach(function (el) {
     el.addEventListener('click', function () {
+      // Birthdays has its own page (same tab, so the login carries over).
+      if (el.getAttribute('data-tab') === 'birthdays') { window.location.href = '/birthdays.html'; return; }
       navItems.forEach(function (n) { n.classList.remove('active'); });
       el.classList.add('active');
       document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
