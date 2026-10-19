@@ -103,6 +103,43 @@
 
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
   @media (max-width: 900px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+  /* ---- Check In ---- */
+  .ci-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .ci-head h1 { margin: 0; }
+  .ci-date { color: var(--muted); font-size: 0.95rem; }
+  .ci-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 22px; }
+  @media (max-width: 900px) { .ci-stats { grid-template-columns: 1fr; } }
+  .ci-stats .stat-card .value { font-size: 2.3rem; }
+  .ci-stats .stat-card.total { background: linear-gradient(135deg, rgba(168,85,247,0.25), rgba(236,72,153,0.22)); border-color: rgba(236,72,153,0.5); }
+  .ci-stats .stat-card.total .value { font-size: 2.8rem; }
+  .ci-stats .stat-card .sub b { color: var(--ink); }
+  .ci-search { width: 100%; padding: 16px 18px; font-size: 1.1rem; border-radius: 12px; border: 2px solid var(--border); background: var(--panel); color: var(--ink); }
+  .ci-search:focus { outline: none; border-color: var(--accent); }
+  .ci-results { display: grid; gap: 12px; margin: 14px 0 26px; }
+  .ci-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .ci-card.done { border-color: rgba(34,197,94,0.5); background: rgba(34,197,94,0.07); }
+  .ci-main { flex: 1; min-width: 240px; }
+  .ci-name { font-size: 1.1rem; font-weight: 700; }
+  .ci-meta { color: var(--muted); font-size: 0.82rem; margin-top: 3px; }
+  .ci-kids { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .ci-kid { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); font-size: 0.85rem; cursor: pointer; user-select: none; }
+  .ci-kid input { width: 16px; height: 16px; accent-color: var(--green); margin: 0; }
+  .ci-kid.off { opacity: 0.5; text-decoration: line-through; }
+  .ci-status { font-size: 0.82rem; margin-top: 8px; }
+  .ci-status.warn { color: #fcd34d; }
+  .ci-status.ok { color: #4ade80; font-weight: 600; }
+  .ci-btn { padding: 14px 22px; border-radius: 12px; border: none; background: var(--green); color: #06240f; font-weight: 800; font-size: 1rem; cursor: pointer; white-space: nowrap; }
+  .ci-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ci-btn.again { background: transparent; color: var(--ink); border: 1px solid var(--border); font-weight: 600; font-size: 0.85rem; padding: 10px 14px; }
+  .link-btn { background: none; border: none; color: #f87171; cursor: pointer; font-size: 0.82rem; font-weight: 600; padding: 4px 6px; }
+  .tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 0.74rem; font-weight: 700; }
+  .tag.new { background: rgba(236,72,153,0.16); color: #f9a8d4; }
+  .tag.in { background: rgba(34,197,94,0.15); color: #4ade80; }
+  .section-title { font-size: 1rem; margin: 6px 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.78rem; }
+  .ci-hint { color: var(--muted); font-size: 0.85rem; padding: 14px 4px; }
+  .toolbar input[type="date"] { color-scheme: dark; }
+  .totals-row td { font-weight: 700; }
   .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
   .stat-card .label { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; }
   .stat-card .value { font-size: 1.9rem; font-weight: 700; margin: 8px 0 4px; }
@@ -208,7 +245,9 @@
   <div class="sidebar">
     <div class="brand"><img src="/assets/logo.png" alt="logo"><span class="brand-text">Kidz Kingdom</span></div>
     <div class="sub">Waiver Admin</div>
-    <div class="navitem active" data-tab="all">📋 All Submissions</div>
+    <div class="navitem active" data-tab="checkin">✅ Check In</div>
+    <div class="navitem" data-tab="history">🕘 History</div>
+    <div class="navitem" data-tab="all">📋 All Submissions</div>
     <div class="navitem" data-tab="date">📅 By Date</div>
     <div class="navitem" data-tab="search">🔍 Search</div>
     <div class="navitem" data-tab="birthdays">🎂 Birthdays</div>
@@ -218,8 +257,73 @@
   <div class="content">
     <div class="load-banner" id="loadBanner"></div>
 
+    <!-- ===== Tab: Check In ===== -->
+    <div class="panel active" id="panel-checkin">
+      <div class="ci-head"><h1>Check In</h1><span class="ci-date" id="ciDate"></span></div>
+
+      <div class="ci-stats">
+        <div class="stat-card">
+          <div class="label">Checked In Today</div>
+          <div class="value" id="ciCheckedFamilies">0</div>
+          <div class="sub"><b id="ciCheckedKids">0</b> kids checked in</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">New Waivers Today</div>
+          <div class="value" id="ciNewFamilies">0</div>
+          <div class="sub"><b id="ciNewKids">0</b> kids on waivers signed today</div>
+        </div>
+        <div class="stat-card total">
+          <div class="label">Total Entries Today</div>
+          <div class="value" id="ciTotalFamilies">0</div>
+          <div class="sub"><b id="ciTotalKids">0</b> kids · checked in + new waivers, each family counted once</div>
+        </div>
+      </div>
+
+      <input type="text" class="ci-search" id="ciSearch_kk" placeholder="🔍 Search a parent or child name, or phone number, to check them in…" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
+      <div class="close-note" id="ciCloseNote" style="display:none;margin-top:12px"></div>
+      <div class="ci-results" id="ciResults"><div class="ci-hint">Type a name or phone number above. Tap a child's name to leave them out if they aren't coming in.</div></div>
+
+      <div class="section-title">Today's entries</div>
+      <table>
+        <thead><tr><th>Time</th><th>Family</th><th>Kids</th><th>Phone</th><th>Type</th><th></th></tr></thead>
+        <tbody id="ciTodayBody"></tbody>
+      </table>
+      <div class="empty-state" id="ciTodayEmpty" style="display:none;">No entries yet today.</div>
+    </div>
+
+    <!-- ===== Tab: History ===== -->
+    <div class="panel" id="panel-history">
+      <h1>Check-In History</h1>
+      <div class="toolbar">
+        <label class="muted" for="histFrom" style="color:var(--muted);font-size:0.85rem">From</label>
+        <input type="date" id="histFrom">
+        <label class="muted" for="histTo" style="color:var(--muted);font-size:0.85rem">To</label>
+        <input type="date" id="histTo">
+        <button id="histToday">Today</button>
+        <button id="histWeek">Last 7 days</button>
+        <button id="histMonth">This month</button>
+        <button class="primary" id="histExport">⬇ Export (CSV)</button>
+      </div>
+
+      <div class="section-title">Daily totals</div>
+      <table>
+        <thead><tr><th>Date</th><th>Checked in</th><th>New waivers</th><th>Total entries</th></tr></thead>
+        <tbody id="histDays"></tbody>
+      </table>
+
+      <div class="toolbar" style="margin-top:24px">
+        <input type="text" id="histSearch_kk" placeholder="Filter check-ins by name or phone…" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
+      </div>
+      <div class="date-summary" id="histSummary"></div>
+      <table>
+        <thead><tr><th>Date</th><th>Time</th><th>Parent / Guardian</th><th>Children</th><th>Phone</th><th></th></tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
+      <div class="empty-state" id="histEmpty" style="display:none;">No check-ins in this period.</div>
+    </div>
+
     <!-- ===== Tab: All Submissions ===== -->
-    <div class="panel active" id="panel-all">
+    <div class="panel" id="panel-all">
       <h1>Waiver Submissions</h1>
 
       <div class="stats">
@@ -504,6 +608,8 @@
       if (tab === 'date') applyDateFilter();
       if (Date.now() - lastLoadedAt > 20000) loadData({ silent: true });
       if (tab === 'birthdays') applyBirthdayFilter();
+      if (tab === 'checkin') { loadCheckins(); setTimeout(function () { document.getElementById('ciSearch_kk').focus(); }, 50); }
+      if (tab === 'history') loadHistory();
     });
   });
 
@@ -521,6 +627,7 @@
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('dashboard').classList.add('show');
       loadData();
+      setTimeout(loadCheckins, 0);
     }).catch(function (err) {
       errBox.textContent = err.message;
     });
@@ -537,6 +644,7 @@
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('dashboard').classList.add('show');
     loadData();
+    setTimeout(loadCheckins, 0);
   }
 
   // ---- Data loading ----
@@ -587,6 +695,7 @@
         applyDateFilter(true);
         applySearchFilter(true);
         applyBirthdayFilter();
+        applyCheckinSearch(true);
         var cbs = afterLoad; afterLoad = [];
         cbs.forEach(function (cb) { cb(); });
       })
@@ -814,6 +923,215 @@
     if (!items.length && (loading || recheckPending)) document.getElementById('searchEmpty').style.display = 'none';
   }
   document.getElementById('searchByNamePhone_kk').addEventListener('input', function () { applySearchFilter(); });
+
+  // ---- Check In ----
+  var ci = { today: null, justChecked: {}, summary: null, loading: false };
+
+  function timeStr(iso) {
+    return new Date(iso).toLocaleTimeString('en-US', { timeZone: MT_TZ, hour: 'numeric', minute: '2-digit' });
+  }
+  function kidNames(s) {
+    if (s.childDetails && s.childDetails.length) return s.childDetails.map(function (c) { return (c.firstName + ' ' + c.lastName).trim(); });
+    return s.children || [];
+  }
+  function checkinApi(path, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ 'x-admin-password': pw(), 'content-type': 'application/json' }, opts.headers || {});
+    opts.cache = 'no-store';
+    return fetch(path, opts).then(function (res) {
+      if (res.status === 401) { sessionStorage.removeItem('kk_admin_pw'); location.reload(); throw new Error('Session expired'); }
+      return res.json().catch(function () { return {}; }).then(function (d) {
+        if (!res.ok) throw new Error(d.error || ('Something went wrong (error ' + res.status + ').'));
+        return d;
+      });
+    });
+  }
+
+  function loadCheckins() {
+    if (ci.loading) return;
+    ci.loading = true;
+    checkinApi('/api/admin/checkins').then(function (d) {
+      ci.loading = false;
+      ci.summary = d; ci.today = d.today;
+      renderCheckinStats(); renderToday(); applyCheckinSearch(true);
+    }).catch(function (err) { ci.loading = false; console.error(err); });
+  }
+  function renderCheckinStats() {
+    var d = ci.summary; if (!d) return;
+    document.getElementById('ciDate').textContent = mtDateLong(d.date);
+    document.getElementById('ciCheckedFamilies').textContent = d.checkedIn.families;
+    document.getElementById('ciCheckedKids').textContent = d.checkedIn.kids;
+    document.getElementById('ciNewFamilies').textContent = d.newWaivers.families;
+    document.getElementById('ciNewKids').textContent = d.newWaivers.kids;
+    document.getElementById('ciTotalFamilies').textContent = d.totalEntries.families;
+    document.getElementById('ciTotalKids').textContent = d.totalEntries.kids;
+  }
+  function renderToday() {
+    var d = ci.summary; if (!d) return;
+    var rows = d.checkIns.map(function (c) {
+      return { at: c.checkedInAt, name: c.parentName, kids: c.children, phone: c.phone, type: c.newWaiverToday ? 'in-new' : 'in', id: c.id };
+    });
+    d.newWaiverList.forEach(function (w) {
+      if (!w.checkedIn) rows.push({ at: w.submittedAt, name: w.parentName, kids: w.children, phone: w.phone, type: 'new' });
+    });
+    rows.sort(function (a, b) { return a.at < b.at ? 1 : -1; });
+    document.getElementById('ciTodayEmpty').style.display = rows.length ? 'none' : 'block';
+    document.getElementById('ciTodayBody').innerHTML = rows.map(function (r) {
+      var tag = r.type === 'new' ? '<span class="tag new">New waiver</span>'
+        : r.type === 'in-new' ? '<span class="tag in">Checked in</span> <span class="tag new">New</span>'
+        : '<span class="tag in">Checked in</span>';
+      return '<tr><td>' + timeStr(r.at) + '</td><td>' + escapeHtml(r.name) + '</td><td>' + escapeHtml(r.kids.join(', ')) +
+        ' <span class="muted">(' + r.kids.length + ')</span></td><td>' + escapeHtml(r.phone) + '</td><td>' + tag + '</td><td>' +
+        (r.id ? '<button class="link-btn" data-undo="' + escapeHtml(r.id) + '">Undo</button>' : '') + '</td></tr>';
+    }).join('');
+  }
+
+  function lastCheckinToday(waiverId) {
+    var list = (ci.summary && ci.summary.checkIns) || [];
+    for (var i = 0; i < list.length; i++) if (list[i].waiverId === waiverId) return list[i];
+    return null;
+  }
+
+  function applyCheckinSearch(keep) {
+    var box = document.getElementById('ciSearch_kk');
+    if (!box) return;
+    var q = box.value.trim();
+    var out = document.getElementById('ciResults');
+    if (!q) {
+      document.getElementById('ciCloseNote').style.display = 'none';
+      out.innerHTML = '<div class="ci-hint">Type a name or phone number above. Tap a child\'s name to leave them out if they aren\'t coming in.</div>';
+      return;
+    }
+    // Keep each card's child ticks when the list re-renders.
+    var prevTicks = {};
+    if (keep) out.querySelectorAll('.ci-card').forEach(function (card) {
+      prevTicks[card.getAttribute('data-id')] = Array.prototype.map.call(card.querySelectorAll('.ci-kid input'), function (i) { return i.checked; });
+    });
+    var items = runSearch(q, null, 'ciCloseNote', function () { applyCheckinSearch(true); }).slice(0, 8);
+    if (!items.length) {
+      out.innerHTML = '<div class="ci-hint">' + ((loading || recheckPending) ? 'Checking for new waivers…' : 'No waiver found. They may need to fill one in at the QR code.') + '</div>';
+      return;
+    }
+    out.innerHTML = items.map(function (s) {
+      var kids = kidNames(s), last = lastCheckinToday(s.id), just = ci.justChecked[s.id];
+      var signedToday = mtDateStr(new Date(s.submittedAt)) === ci.today;
+      var ticks = prevTicks[s.id];
+      var status = just ? '<div class="ci-status ok">✓ Checked in at ' + timeStr(just.checkedInAt) + ' (' + just.kids + ' kid' + (just.kids === 1 ? '' : 's') + ') · <button class="link-btn" data-undo="' + escapeHtml(just.id) + '">Undo</button></div>'
+        : last ? '<div class="ci-status warn">Already checked in today at ' + timeStr(last.checkedInAt) + '</div>'
+        : signedToday ? '<div class="ci-status warn">Signed their waiver today, so they already count as an entry. Checking in is optional.</div>' : '';
+      return '<div class="ci-card' + (just ? ' done' : '') + '" data-id="' + s.id + '">' +
+        '<div class="ci-main"><div class="ci-name">' + escapeHtml(s.parentName) + '</div>' +
+        '<div class="ci-meta">' + escapeHtml(s.phone || '') + ' · ' + escapeHtml(s.email || '') + ' · waiver signed ' + mtDate(new Date(s.submittedAt)) + '</div>' +
+        '<div class="ci-kids">' + kids.map(function (k, i) {
+          var on = ticks ? ticks[i] !== false : true;
+          return '<label class="ci-kid' + (on ? '' : ' off') + '"><input type="checkbox"' + (on ? ' checked' : '') + '> ' + escapeHtml(k) + '</label>';
+        }).join('') + '</div>' + status + '</div>' +
+        (just ? '' : '<button class="ci-btn' + (last ? ' again' : '') + '" data-checkin="' + s.id + '">' + (last ? 'Check in again' : '✓ Check In') + '</button>') +
+        '</div>';
+    }).join('');
+  }
+  document.getElementById('ciSearch_kk').addEventListener('input', function () { ci.justChecked = {}; applyCheckinSearch(false); });
+
+  document.getElementById('ciResults').addEventListener('change', function (e) {
+    if (e.target.type === 'checkbox') e.target.closest('.ci-kid').classList.toggle('off', !e.target.checked);
+  });
+  document.getElementById('ciResults').addEventListener('click', function (e) {
+    var undo = e.target.getAttribute('data-undo');
+    if (undo) return undoCheckin(undo);
+    var id = e.target.getAttribute('data-checkin');
+    if (!id) return;
+    var card = e.target.closest('.ci-card');
+    var s = state.all.filter(function (x) { return x.id === id; })[0];
+    if (!s) return;
+    var kids = kidNames(s);
+    var chosen = [];
+    card.querySelectorAll('.ci-kid input').forEach(function (inp, i) { if (inp.checked) chosen.push(kids[i]); });
+    if (kids.length && !chosen.length) { alert('Tick at least one child who is coming in.'); return; }
+    e.target.disabled = true; e.target.textContent = 'Checking in…';
+    checkinApi('/api/admin/checkin', { method: 'POST', body: JSON.stringify({ waiverId: id, children: kids.length ? chosen : null }) })
+      .then(function (d) {
+        ci.justChecked[id] = d.checkIn;
+        loadCheckins();
+        applyCheckinSearch(true);
+        // Ready for the next family: select the search text so typing replaces it.
+        var box = document.getElementById('ciSearch_kk'); box.focus(); box.select();
+      })
+      .catch(function (err) { e.target.disabled = false; e.target.textContent = '✓ Check In'; alert(err.message); });
+  });
+  document.getElementById('ciTodayBody').addEventListener('click', function (e) {
+    var undo = e.target.getAttribute('data-undo');
+    if (undo) undoCheckin(undo);
+  });
+  function undoCheckin(id) {
+    if (!confirm('Undo this check-in?')) return;
+    checkinApi('/api/admin/checkin?id=' + encodeURIComponent(id), { method: 'DELETE' }).then(function () {
+      Object.keys(ci.justChecked).forEach(function (k) { if (ci.justChecked[k].id === id) delete ci.justChecked[k]; });
+      loadCheckins();
+    }).catch(function (err) { alert(err.message); });
+  }
+
+  // Keep today's counters current (other devices may be checking people in too).
+  setInterval(function () {
+    var active = document.getElementById('panel-checkin').classList.contains('active');
+    if (active && document.visibilityState === 'visible' && pw()) loadCheckins();
+  }, 30000);
+
+  // ---- History ----
+  var hist = { data: null };
+  function addDays(dateStr, n) {
+    var d = new Date(dateStr + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10);
+  }
+  function setRange(from, to) { document.getElementById('histFrom').value = from; document.getElementById('histTo').value = to; loadHistory(); }
+  (function initHistory() {
+    var today = mtDateStr(new Date());
+    document.getElementById('histFrom').value = addDays(today, -6);
+    document.getElementById('histTo').value = today;
+  })();
+  document.getElementById('histToday').addEventListener('click', function () { var t = mtDateStr(new Date()); setRange(t, t); });
+  document.getElementById('histWeek').addEventListener('click', function () { var t = mtDateStr(new Date()); setRange(addDays(t, -6), t); });
+  document.getElementById('histMonth').addEventListener('click', function () { var t = mtDateStr(new Date()); setRange(t.slice(0, 8) + '01', t); });
+  document.getElementById('histFrom').addEventListener('change', loadHistory);
+  document.getElementById('histTo').addEventListener('change', loadHistory);
+  document.getElementById('histSearch_kk').addEventListener('input', renderHistory);
+  document.getElementById('histExport').addEventListener('click', function () {
+    var f = document.getElementById('histFrom').value, t = document.getElementById('histTo').value;
+    downloadCsv('/api/admin/checkins?from=' + f + '&to=' + t + '&format=csv', 'kidz-kingdom-checkins-' + f + '-to-' + t + '.csv');
+  });
+
+  function loadHistory() {
+    var f = document.getElementById('histFrom').value, t = document.getElementById('histTo').value;
+    if (!f || !t) return;
+    if (f > t) { document.getElementById('histSummary').textContent = 'The From date must be before the To date.'; return; }
+    document.getElementById('histSummary').textContent = 'Loading…';
+    checkinApi('/api/admin/checkins?from=' + f + '&to=' + t).then(function (d) { hist.data = d; renderHistory(); })
+      .catch(function (err) { document.getElementById('histSummary').textContent = err.message; });
+  }
+  function fk(f, k) { return f + (f === 1 ? ' family' : ' families') + ' · ' + k + (k === 1 ? ' kid' : ' kids'); }
+  function renderHistory() {
+    var d = hist.data; if (!d) return;
+    var tot = { cf: 0, ck: 0, nf: 0, nk: 0, tf: 0, tk: 0 };
+    document.getElementById('histDays').innerHTML = d.days.map(function (x) {
+      tot.cf += x.checkedIn.families; tot.ck += x.checkedIn.kids; tot.nf += x.newWaivers.families; tot.nk += x.newWaivers.kids;
+      tot.tf += x.totalEntries.families; tot.tk += x.totalEntries.kids;
+      return '<tr><td>' + mtDateLong(x.date) + '</td><td>' + fk(x.checkedIn.families, x.checkedIn.kids) + '</td><td>' +
+        fk(x.newWaivers.families, x.newWaivers.kids) + '</td><td><b>' + fk(x.totalEntries.families, x.totalEntries.kids) + '</b></td></tr>';
+    }).join('') + (d.days.length > 1 ? '<tr class="totals-row"><td>Total</td><td>' + fk(tot.cf, tot.ck) + '</td><td>' +
+      fk(tot.nf, tot.nk) + '</td><td>' + fk(tot.tf, tot.tk) + '</td></tr>' : '');
+
+    var q = document.getElementById('histSearch_kk').value.trim();
+    var list = d.checkIns.filter(function (c) {
+      if (!q) return true;
+      var probe = { parentName: c.parentName, children: c.children, email: c.email, phone: c.phone };
+      return matches(probe, q) || phoneQueryMatches(probe, q);
+    });
+    document.getElementById('histSummary').textContent = list.length + ' check-in' + (list.length === 1 ? '' : 's') + (q ? ' matching "' + q + '"' : '') + ' in this period';
+    document.getElementById('histEmpty').style.display = list.length ? 'none' : 'block';
+    document.getElementById('histBody').innerHTML = list.map(function (c) {
+      return '<tr><td>' + mtDate(new Date(c.checkedInAt)) + '</td><td>' + timeStr(c.checkedInAt) + '</td><td>' + escapeHtml(c.parentName) +
+        '</td><td>' + escapeHtml(c.children.join(', ')) + ' <span class="muted">(' + c.kids + ')</span></td><td>' + escapeHtml(c.phone) + '</td><td>' +
+        (c.newWaiverToday ? '<span class="tag new">New waiver</span>' : '') + '</td></tr>';
+    }).join('');
+  }
 
   // ---- View modal ----
   function openModal(id) {
