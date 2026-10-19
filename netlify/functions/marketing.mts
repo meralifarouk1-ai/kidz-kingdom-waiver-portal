@@ -26,7 +26,7 @@ export default async (req: Request, context: Context) => {
     const id = new URL(req.url).searchParams.get("campaign");
     if (id) {
       const c = await getCampaign(id);
-      return c ? json({ campaign: publicCampaign(c) }) : json({ error: "Not found" }, 404);
+      return c ? json({ campaign: { ...publicCampaign(c), body: c.body } }) : json({ error: "Not found" }, 404);
     }
     try {
       const [draft, settings, audience, campaigns] = await Promise.all([

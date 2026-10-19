@@ -1,10 +1,13 @@
 import type { Context, Config } from "@netlify/functions";
 import { isAuthorized } from "../lib/waiver.mts";
 import { emailProvider, siteUrlFrom, SendError, TEST_EMAIL } from "../lib/email.mts";
+import { validateSendTime, mtLabel } from "../lib/schedule.mts";
 import {
   buildMarketingEmail,
   sendBatch,
   createCampaign,
+  scheduleCampaign,
+  cancelCampaign,
   continueCampaign,
   pauseCampaign,
   publicCampaign,
@@ -20,6 +23,8 @@ const json = (data: unknown, status = 200) =>
 //   {action:"start", subject, body, confirm}  freeze the audience and create a campaign
 //   {action:"continue", campaignId}           send the next few batches
 //   {action:"pause", campaignId}
+//   {action:"schedule", subject, body, sendAt:"YYYY-MM-DDTHH:mm" (Edmonton)}
+//   {action:"cancel", campaignId}             cancel a scheduled email
 export default async (req: Request, context: Context) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   if (!isAuthorized(req)) return json({ error: "Unauthorized" }, 401);
@@ -51,6 +56,20 @@ export default async (req: Request, context: Context) => {
       const c = await createCampaign({ subject, body }, await loadSettings(), siteUrl);
       if (!c.total) return json({ error: "There's nobody to send to." }, 400);
       return json({ campaign: publicCampaign(c) });
+    }
+
+    if (b.action === "schedule") {
+      if (!subject || !body.trim()) return json({ error: "Please write a subject and a message first." }, 400);
+      const t = validateSendTime((b.sendAt || "").toString());
+      if ("error" in t) return json({ error: t.error }, 400);
+      await saveDraft({ subject, body });
+      const c = await scheduleCampaign({ subject, body }, await loadSettings(), siteUrl, t.at);
+      return json({ campaign: publicCampaign(c), when: mtLabel(t.at) });
+    }
+
+    if (b.action === "cancel") {
+      const c = await cancelCampaign((b.campaignId || "").toString());
+      return c ? json({ campaign: publicCampaign(c) }) : json({ error: "Not found" }, 404);
     }
 
     if (b.action === "continue") {

@@ -277,12 +277,14 @@ function childKey(first: string, last: string, month: number, year: number) {
 // Children with a birthday in `month`, one row per child (deduplicated across
 // waivers, newest contact details win). The birthday year is this year for
 // this month or later, and next year for months that have already passed.
-export async function birthdaysForMonth(month: number) {
+// forYear: the year of the birthday being celebrated. Defaults to the next
+// time this month comes round (this year, or next year for past months).
+export async function birthdaysForMonth(month: number, forYear?: number) {
   const { entries, failed } = await loadIndex();
   const now = new Date().toLocaleDateString("en-CA", { timeZone: MT_TZ });
   const thisYear = Number(now.slice(0, 4));
   const thisMonth = Number(now.slice(5, 7));
-  const birthdayYear = month >= thisMonth ? thisYear : thisYear + 1;
+  const birthdayYear = forYear || (month >= thisMonth ? thisYear : thisYear + 1);
 
   const seen = new Set<string>();
   const children: BirthdayChild[] = [];
@@ -396,7 +398,7 @@ async function sendWithResend(to: string, msg: { subject: string; text: string; 
       );
     }
     if (/daily|quota|monthly/i.test(detail)) {
-      throw new SendError("Resend's sending limit was reached (free plan: 100 a day). Send the rest tomorrow.", true);
+      throw new SendError("Resend's sending limit for your plan was reached. Try again once it resets.", true);
     }
     if (res.status === 429 || res.status >= 500) {
       await sleep(600 * 2 ** attempt);

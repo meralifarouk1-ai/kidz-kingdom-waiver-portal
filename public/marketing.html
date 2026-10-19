@@ -63,7 +63,7 @@
     #app.show { flex-direction: column; }
     .sidebar { width: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 16px; }
     .sidebar .sub { margin-bottom: 12px; }
-    .navs { display: flex; gap: 8px; }
+    .navs { display: flex; gap: 8px; flex-wrap: wrap; }
     .navitem { margin: 0; }
     .content { padding: 20px 16px 140px; }
   }
@@ -198,6 +198,14 @@
   .mail .body a { color: #7c3aed; font-weight: 600; }
   .modal input[type="text"] { padding: 11px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); color: var(--ink); font-size: 1rem; letter-spacing: 0.1em; }
   a.navitem { display: flex; }
+  .pill.scheduled { background: rgba(96, 165, 250, 0.14); color: var(--blue); }
+  .pill.cancelled { background: rgba(139, 147, 171, 0.14); color: var(--muted); }
+  .sched-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 12px; }
+  .sched-grid label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .sched-grid input, .sched-grid select { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); color: var(--ink); font-size: 0.95rem; font-family: inherit; color-scheme: dark; }
+  .sched-when { background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.3); color: #bfdbfe; padding: 10px 14px; border-radius: 10px; font-size: 0.9rem; }
+  .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  @media (max-width: 520px) { .sched-grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -220,7 +228,7 @@
     <a class="back-link" href="/admin.html">← Waiver Admin</a>
     <div class="navs">
       <button class="navitem active" data-tab="compose">✍️ New Email</button>
-      <button class="navitem" data-tab="history">📊 Sent Emails</button>
+      <button class="navitem" data-tab="history">📊 Sent &amp; Scheduled</button>
       <a class="navitem" href="/birthdays.html" style="text-decoration:none">🎂 Birthdays</a>
     </div>
   </aside>
@@ -292,21 +300,22 @@
 
     <!-- ===== History ===== -->
     <section class="panel" id="panel-history">
-      <h1>Sent Emails</h1>
-      <p class="lead">Every marketing email you've sent. If sending was interrupted, for example the page was closed, press <b>Resume</b> to finish it. Nobody gets it twice.</p>
+      <h1>Sent &amp; Scheduled</h1>
+      <p class="lead">Scheduled emails go out by themselves at the time you picked (Edmonton time, within about 5 minutes); you don't need to keep this page open. You can <b>Edit</b> or <b>Cancel</b> them until then. If a send you started by hand was interrupted, press <b>Resume</b> to finish it. Nobody gets it twice.</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Started</th><th>Subject</th><th>Sent</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>When</th><th>Subject</th><th>Sent</th><th>Status</th><th></th></tr></thead>
           <tbody id="historyRows"></tbody>
         </table>
       </div>
-      <div class="empty-state hidden" id="historyEmpty">No marketing emails sent yet.</div>
+      <div class="empty-state hidden" id="historyEmpty">No marketing emails sent or scheduled yet.</div>
     </section>
   </main>
 
   <div class="actionbar" id="actionbar">
     <span class="count" id="sendCount"></span>
     <button class="btn" id="testBtn">✉️ Send Test to kidzkingdom2023@gmail.com</button>
+    <button class="btn" id="schedBtn" disabled>🕒 Schedule…</button>
     <button class="btn green" id="sendBtn" disabled>🚀 Send to all families</button>
   </div>
 </div>
@@ -410,7 +419,7 @@
       updateButtons();
       renderPreview();
       // Offer to finish an interrupted campaign.
-      var unfinished = (d.campaigns || []).filter(function (c) { return c.status !== 'done'; })[0];
+      var unfinished = (d.campaigns || []).filter(function (c) { return c.status === 'paused' || (c.status === 'sending' && !c.auto); })[0];
       if (unfinished && !state.sending && !state.offeredResume) {
         state.offeredResume = true;
         toast('"' + unfinished.subject + '" didn\'t finish sending. Open Sent Emails to resume it.', 'err');
@@ -424,6 +433,7 @@
     var ok = state.provider === 'resend' && !state.sending;
     $('sendBtn').disabled = !ok || !state.audience;
     $('testBtn').disabled = !ok;
+    $('schedBtn').disabled = !ok || !state.audience;
     $('sendBtn').textContent = '🚀 Send to all ' + n(state.audience) + ' families';
     $('sendCount').textContent = state.dirty ? 'Saving draft…' : '';
   }
@@ -663,25 +673,144 @@
     step();
   }
 
+  // ---------- schedule ----------
+  // Dates and times are picked in Edmonton time; the server converts them.
+  function mtToday() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Edmonton' }); }
+  function addDays(date, k) { var d = new Date(date + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + k); return d.toISOString().slice(0, 10); }
+  function timeOptions(selected) {
+    var out = '';
+    for (var h = 0; h < 24; h++) for (var m = 0; m < 60; m += 15) {
+      var v = (h < 10 ? '0' : '') + h + ':' + (m ? m : '00');
+      var label = ((h % 12) || 12) + ':' + (m ? m : '00') + (h < 12 ? ' AM' : ' PM');
+      out += '<option value="' + v + '"' + (v === selected ? ' selected' : '') + '>' + label + '</option>';
+    }
+    return out;
+  }
+  function whenLabel(date, time) {
+    if (!date || !time) return '';
+    var d = new Date(date + 'T12:00:00Z');
+    var h = +time.slice(0, 2), m = time.slice(3);
+    return d.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) +
+      ' at ' + ((h % 12) || 12) + ':' + m + (h < 12 ? ' AM' : ' PM') + ' (Edmonton time)';
+  }
+  $('schedBtn').addEventListener('click', function () {
+    var c = current();
+    if (!c.subject.trim() || !c.body.trim()) { toast('Please write a subject and a message first.', 'err'); return; }
+    if (!c.footerAddress.trim() || !c.contactLine.trim()) { toast('Please fill in the email footer (address and contact).', 'err'); return; }
+    var today = mtToday();
+    modal(
+      '<h2>🕒 Schedule this email</h2>' +
+      '<p>Subject: <b style="color:var(--ink)">' + esc(fill(c.subject)) + '</b></p>' +
+      '<div class="sched-grid"><div><label for="sDate">Date</label><input type="date" id="sDate" min="' + today + '" max="' + addDays(today, 365) + '" value="' + addDays(today, 1) + '"></div>' +
+      '<div><label for="sTime">Time (Edmonton)</label><select id="sTime">' + timeOptions('10:00') + '</select></div></div>' +
+      '<div class="sched-when" id="sWhen"></div>' +
+      '<p style="margin-top:12px">It will go to every family on the list <b>at that time</b> (about ' + n(state.audience) + ' today), including anyone who signs a waiver before then. You can edit or cancel it from <b>Sent &amp; Scheduled</b> until it goes out. You don\'t need to keep this page open.</p>' +
+      '<p>Have you sent yourself a test? If not, cancel and press <b>Send Test</b> first.</p>' +
+      '<div class="buttons"><button class="btn ghost" id="mCancel">Cancel</button>' +
+      '<button class="btn primary" id="mGo">🕒 Schedule</button></div>'
+    );
+    function upd() { $('sWhen').textContent = '📅 Sends ' + whenLabel($('sDate').value, $('sTime').value); }
+    $('sDate').addEventListener('input', upd); $('sTime').addEventListener('change', upd); upd();
+    $('mCancel').onclick = closeModal;
+    $('mGo').onclick = function () {
+      var date = $('sDate').value, time = $('sTime').value;
+      if (!date) { toast('Please pick a date.', 'err'); return; }
+      $('mGo').disabled = true; $('mGo').textContent = 'Scheduling…';
+      saveDraft().then(function () {
+        return api('/api/admin/marketing-send', { method: 'POST', body: JSON.stringify({ action: 'schedule', subject: c.subject, body: c.body, sendAt: date + 'T' + time }) });
+      }).then(function (d) {
+        closeModal();
+        toast('Scheduled for ' + d.when + ' (Edmonton time).');
+        document.querySelector('.navitem[data-tab="history"]').click();
+      }).catch(function (err) {
+        toast(err.message, 'err');
+        if ($('mGo')) { $('mGo').disabled = false; $('mGo').textContent = '🕒 Schedule'; }
+      });
+    };
+  });
+
   // ---------- history ----------
+  function statusPill(c) {
+    if (c.status === 'done') return '<span class="pill sent">✓ Sent</span>';
+    if (c.status === 'scheduled') return '<span class="pill scheduled">🕒 Scheduled</span>';
+    if (c.status === 'cancelled') return '<span class="pill cancelled">Cancelled</span>';
+    if (c.status === 'sending' && c.auto) return '<span class="pill sending">Sending… (automatic)</span>';
+    if (c.status === 'paused' && c.userPaused) return '<span class="pill sending">⏸ Paused</span>';
+    return '<span class="pill sending">Not finished</span>';
+  }
   function renderHistory(list) {
+    // Upcoming first (soonest at the top), then everything else newest first.
+    var upcoming = list.filter(function (c) { return c.status === 'scheduled'; })
+      .sort(function (a, b) { return a.scheduledAt < b.scheduledAt ? -1 : 1; });
+    var rest = list.filter(function (c) { return c.status !== 'scheduled'; });
+    list = upcoming.concat(rest);
+    state.anyActive = list.some(function (c) { return c.status === 'scheduled' || (c.status === 'sending' && c.auto); });
     $('historyEmpty').classList.toggle('hidden', list.length > 0);
     $('historyRows').innerHTML = list.map(function (c) {
-      var status = c.status === 'done'
-        ? '<span class="pill sent">✓ Sent</span>'
-        : '<span class="pill sending" title="' + esc(c.lastError || '') + '">Not finished</span>';
-      return '<tr><td>' + esc(fmtDate(c.createdAt)) + '</td><td class="child-name">' + esc(c.subject) + '</td>' +
-        '<td>' + n(c.sent) + ' / ' + n(c.total) + (c.failed ? ' <span class="muted">(' + n(c.failed) + ' failed)</span>' : '') + '</td>' +
-        '<td>' + status + (c.lastError ? '<div class="muted" style="font-size:0.78rem;margin-top:4px;max-width:280px">' + esc(c.lastError) + '</div>' : '') + '</td>' +
-        '<td>' + (c.status !== 'done' ? '<button class="btn small green" data-resume="' + esc(c.id) + '">▶ Resume</button>' : '') + '</td></tr>';
+      var when = c.status === 'scheduled' ? '<b>' + esc(fmtDate(c.scheduledAt)) + '</b>'
+        : c.scheduledAt ? esc(fmtDate(c.startedAt || c.scheduledAt)) + '<div class="muted" style="font-size:0.75rem">' + (c.status === 'cancelled' ? 'was scheduled' : 'scheduled') + '</div>'
+        : esc(fmtDate(c.createdAt));
+      var sent = c.status === 'scheduled' ? '<span class="muted">about ' + n(state.audience || c.estimate) + '</span>'
+        : c.status === 'cancelled' ? '<span class="muted">—</span>'
+        : n(c.sent) + ' / ' + n(c.total) + (c.failed ? ' <span class="muted">(' + n(c.failed) + ' failed)</span>' : '');
+      var actions = '';
+      if (c.status === 'scheduled') {
+        actions = '<button class="btn small" data-edit="' + esc(c.id) + '">✏️ Edit</button>' +
+          '<button class="btn small ghost" data-cancel="' + esc(c.id) + '">✖ Cancel</button>';
+      } else if (c.status === 'sending' && c.auto) {
+        actions = '<button class="btn small" data-pause="' + esc(c.id) + '">⏸ Pause</button>';
+      } else if (c.status !== 'done' && c.status !== 'cancelled') {
+        actions = '<button class="btn small green" data-resume="' + esc(c.id) + '">▶ Resume</button>';
+      }
+      return '<tr><td>' + when + '</td><td class="child-name">' + esc(c.subject) + '</td>' +
+        '<td>' + sent + '</td>' +
+        '<td>' + statusPill(c) + (c.lastError && c.status !== 'done' ? '<div class="muted" style="font-size:0.78rem;margin-top:4px;max-width:280px">' + esc(c.lastError) + '</div>' : '') + '</td>' +
+        '<td><div class="row-actions">' + actions + '</div></td></tr>';
     }).join('');
   }
   $('historyRows').addEventListener('click', function (e) {
-    var id = e.target.getAttribute('data-resume');
-    if (!id || state.sending) return;
-    api('/api/admin/marketing?campaign=' + encodeURIComponent(id)).then(function (d) { runCampaign(d.campaign); })
-      .catch(function (err) { toast(err.message, 'err'); });
+    var t = e.target.closest('button'); if (!t) return;
+    var id = t.getAttribute('data-resume');
+    if (id) {
+      if (state.sending) return;
+      api('/api/admin/marketing?campaign=' + encodeURIComponent(id)).then(function (d) { runCampaign(d.campaign); })
+        .catch(function (err) { toast(err.message, 'err'); });
+      return;
+    }
+    if ((id = t.getAttribute('data-cancel'))) {
+      if (!confirm('Cancel this scheduled email? Nobody will receive it.')) return;
+      t.disabled = true;
+      api('/api/admin/marketing-send', { method: 'POST', body: JSON.stringify({ action: 'cancel', campaignId: id }) })
+        .then(function () { toast('Scheduled email cancelled.'); loadAll(); })
+        .catch(function (err) { toast(err.message, 'err'); loadAll(); });
+      return;
+    }
+    if ((id = t.getAttribute('data-pause'))) {
+      t.disabled = true;
+      api('/api/admin/marketing-send', { method: 'POST', body: JSON.stringify({ action: 'pause', campaignId: id }) })
+        .then(function () { toast('Paused. Press Resume to carry on; nobody gets it twice.'); loadAll(); })
+        .catch(function (err) { toast(err.message, 'err'); loadAll(); });
+      return;
+    }
+    if ((id = t.getAttribute('data-edit'))) {
+      if (!confirm('Edit this email? Its schedule is cancelled and it opens in the editor, so you can change it and schedule it again.')) return;
+      t.disabled = true;
+      api('/api/admin/marketing?campaign=' + encodeURIComponent(id)).then(function (d) {
+        var c = d.campaign;
+        return api('/api/admin/marketing-send', { method: 'POST', body: JSON.stringify({ action: 'cancel', campaignId: id }) }).then(function () {
+          $('subject').value = c.subject; $('body').value = c.body;
+          changed(); renderPreview();
+          document.querySelector('.navitem[data-tab="compose"]').click();
+          toast('Opened in the editor. Make your changes, then press Schedule again.');
+        });
+      }).catch(function (err) { toast(err.message, 'err'); loadAll(); });
+    }
   });
+  // Keep the list fresh while something is scheduled or sending in the background.
+  setInterval(function () {
+    var open = $('panel-history').classList.contains('active');
+    if (open && state.anyActive && !state.sending && document.visibilityState === 'visible') loadAll();
+  }, 30000);
 
   // ---------- start ----------
   var started = false;

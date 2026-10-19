@@ -63,7 +63,7 @@
     #app.show { flex-direction: column; }
     .sidebar { width: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 16px; }
     .sidebar .sub { margin-bottom: 12px; }
-    .navs { display: flex; gap: 8px; }
+    .navs { display: flex; gap: 8px; flex-wrap: wrap; }
     .navitem { margin: 0; }
     .content { padding: 20px 16px 140px; }
   }
@@ -110,6 +110,26 @@
   .pill.unsubscribed, .pill.no-email { background: rgba(139, 147, 171, 0.14); color: var(--muted); }
   .pill.failed { background: rgba(239, 68, 68, 0.15); color: #f87171; }
   .pill.sending { background: rgba(245, 158, 11, 0.15); color: #fcd34d; }
+  .pill.scheduled { background: rgba(168, 85, 247, 0.16); color: #d8b4fe; }
+  .pill.cancelled { background: rgba(139, 147, 171, 0.14); color: var(--muted); }
+  .hidden-tab { display: none !important; }
+  .sched-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 18px; }
+  .sched-card h2 { margin: 0 0 6px; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .sched-card p { color: var(--muted); font-size: 0.88rem; line-height: 1.55; margin: 0 0 12px; }
+  .sched-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 12px; }
+  .sched-grid label, .sched-field label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .sched-grid input, .sched-grid select, .sched-field select { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); color: var(--ink); font-size: 0.95rem; font-family: inherit; color-scheme: dark; }
+  .sched-fields { display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-bottom: 14px; max-width: 640px; }
+  .sched-when { background: rgba(168,85,247,0.1); border: 1px solid rgba(168,85,247,0.35); color: #e9d5ff; padding: 10px 14px; border-radius: 10px; font-size: 0.9rem; }
+  .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; font-size: 0.95rem; user-select: none; }
+  .switch input { width: 20px; height: 20px; }
+  .auto-status { font-size: 0.85rem; margin-top: 10px; min-height: 1em; }
+  .upcoming { list-style: none; padding: 0; margin: 8px 0 0; font-size: 0.88rem; }
+  .upcoming li { padding: 7px 0; border-bottom: 1px solid var(--border); display: flex; gap: 12px; }
+  .upcoming li b { min-width: 110px; color: var(--ink); }
+  .upcoming li span { color: var(--muted); }
+  .names { color: var(--muted); font-size: 0.82rem; max-width: 360px; }
+  @media (max-width: 620px) { .sched-grid, .sched-fields { grid-template-columns: 1fr; } }
   .empty-state { text-align: center; padding: 50px 20px; color: var(--muted); }
   .muted { color: var(--muted); }
 
@@ -198,6 +218,7 @@
     <a class="back-link" href="/admin.html">← Waiver Admin</a>
     <div class="navs">
       <button class="navitem active" data-tab="send">🎂 Birthday Emails</button>
+      <button class="navitem" data-tab="schedule">🕒 Scheduled &amp; Automatic</button>
       <button class="navitem" data-tab="template">✉️ Email Template</button>
       <a class="navitem" href="/marketing.html" style="text-decoration:none;display:flex">📣 Marketing</a>
     </div>
@@ -209,10 +230,48 @@
       is added in Netlify as <code>RESEND_API_KEY</code>. Emails will come from birthdays@kidzkingdomqr.com.
     </div>
 
+    <!-- ===== Scheduled & Automatic tab ===== -->
+    <section class="panel" id="panel-schedule">
+      <h1>Scheduled &amp; Automatic</h1>
+      <p class="lead">Birthday emails can go out by themselves. Times are Edmonton time, and emails go out within about 5 minutes of the time picked. You don't need to keep this page open. They always use your saved <b>Email Template</b>. Nobody gets the same birthday email twice.</p>
+
+      <div class="sched-card">
+        <h2>🤖 Automatic birthday emails <span class="pill" id="autoPill">…</span></h2>
+        <p>When this is on, every child gets their birthday email <b>on their birthday</b>, at the time you choose. There's nothing to tick. Children who were already emailed by hand or by a scheduled send are skipped.</p>
+        <label class="switch"><input type="checkbox" id="autoOn"> Send birthday emails automatically</label>
+        <div class="sched-fields" style="margin-top:14px">
+          <div class="sched-field"><label for="autoHour">Send at (Edmonton)</label><select id="autoHour"></select></div>
+          <div class="sched-field"><label for="autoNoDay">Children with only a birth month (older waivers)</label>
+            <select id="autoNoDay">
+              <option value="first">Send on the 1st of their birthday month</option>
+              <option value="skip">Don't send automatically (I'll do those by hand)</option>
+            </select></div>
+        </div>
+        <button class="btn primary" id="autoSave">💾 Save</button>
+        <div class="auto-status" id="autoStatus"></div>
+        <div id="upcomingWrap" class="hidden" style="margin-top:16px">
+          <p style="margin:0"><b style="color:var(--ink)">Coming up in the next 2 weeks</b></p>
+          <ul class="upcoming" id="upcoming"></ul>
+        </div>
+      </div>
+
+      <div class="sched-card">
+        <h2>🕒 Scheduled sends</h2>
+        <p>To schedule a send, go to <b>Birthday Emails</b>, tick the children, then press <b>Schedule</b>.</p>
+        <div class="table-wrap hidden" id="jobsWrap">
+          <table>
+            <thead><tr><th>When</th><th>Children</th><th>Status</th><th></th></tr></thead>
+            <tbody id="jobRows"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="jobsEmpty" style="padding:18px">Nothing scheduled.</div>
+      </div>
+    </section>
+
     <!-- ===== Send tab ===== -->
     <section class="panel active" id="panel-send">
       <h1>Birthday Emails</h1>
-      <p class="lead">Pick a month, tick the children to email, then send. Each email is addressed to the parent and filled in with the child's name and age.</p>
+      <p class="lead">Pick a month, tick the children to email, then send now or press <b>Schedule</b> to pick a date and time. Each email is addressed to the parent and filled in with the child's name and age. To send every birthday email automatically on the day, use <b>Scheduled &amp; Automatic</b>.</p>
 
       <div class="toolbar">
         <select id="monthSelect" aria-label="Birthday month"></select>
@@ -308,6 +367,7 @@
   <div class="actionbar" id="actionbar">
     <span class="count" id="selCount">0 selected</span>
     <button class="btn" id="testBtn">✉️ Send Test to kidzkingdom2023@gmail.com</button>
+    <button class="btn" id="schedBtn" disabled>🕒 Schedule…</button>
     <button class="btn green" id="sendBtn" disabled>🎉 Send All Selected</button>
   </div>
 </div>
@@ -396,6 +456,8 @@
       el.classList.add('active');
       document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
       $('panel-' + el.getAttribute('data-tab')).classList.add('active');
+      $('actionbar').classList.toggle('hidden-tab', el.getAttribute('data-tab') !== 'send');
+      if (el.getAttribute('data-tab') === 'schedule') loadSchedule();
       renderPreview();
     });
   });
@@ -414,7 +476,8 @@
     $('emptyState').classList.remove('hidden');
     $('tableWrap').classList.add('hidden');
     $('summary').classList.add('hidden');
-    return api('/api/admin/birthdays?month=' + month).then(function (d) {
+    return Promise.all([api('/api/admin/birthdays?month=' + month), loadJobs()]).then(function (all) {
+      var d = all[0];
       state.month = d.month; state.year = d.birthdayYear; state.children = d.children;
       state.emailConfigured = d.emailConfigured; state.selected = {};
       $('setupNotice').classList.toggle('hidden', d.emailConfigured);
@@ -441,6 +504,9 @@
     if (c.status === 'no-email') return '<span class="pill no-email">No email</span>';
     if (c.status === 'failed') return '<span class="pill failed" title="' + esc(c.reason || '') + '">Failed</span>';
     if (c.status === 'sending') return '<span class="pill sending">Sending…</span>';
+    var job = scheduledFor(c.key);
+    if (job) return '<span class="pill scheduled" title="Scheduled send">🕒 ' + esc(shortWhen(job.scheduledAt)) + '</span>';
+    if (autoDate(c)) return '<span class="pill scheduled" title="Automatic birthday email">🤖 Auto ' + esc(autoDate(c)) + '</span>';
     return '<span class="pill ready">Ready</span>';
   }
   function selectable(c) { return c.status !== 'unsubscribed' && c.status !== 'no-email'; }
@@ -503,6 +569,8 @@
     $('selCount').textContent = n + (n === 1 ? ' child selected' : ' children selected');
     $('sendBtn').textContent = n ? ('🎉 Send All Selected (' + n + ')') : '🎉 Send All Selected';
     $('sendBtn').disabled = !n || state.sending;
+    $('schedBtn').disabled = !n || state.sending;
+    $('schedBtn').textContent = n ? ('🕒 Schedule (' + n + ')…') : '🕒 Schedule…';
     $('testBtn').disabled = state.sending;
     var eligible = state.children.filter(function (c) { return selectable(c) && c.status !== 'sent'; });
     $('selectAll').checked = eligible.length > 0 && eligible.every(function (c) { return state.selected[c.key]; });
@@ -818,6 +886,170 @@
       $('mDone').onclick = closeModal;
     });
   }
+
+  // ---------- scheduling ----------
+  // Dates and times are picked in Edmonton time; the server converts them.
+  state.jobs = []; state.auto = null;
+  function mtToday() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Edmonton' }); }
+  function addDays(date, k) { var d = new Date(date + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + k); return d.toISOString().slice(0, 10); }
+  function hourLabel(h) { return ((h % 12) || 12) + ':00 ' + (h < 12 ? 'AM' : 'PM'); }
+  function timeOptions(selected) {
+    var out = '';
+    for (var h = 0; h < 24; h++) for (var m = 0; m < 60; m += 15) {
+      var v = (h < 10 ? '0' : '') + h + ':' + (m ? m : '00');
+      out += '<option value="' + v + '"' + (v === selected ? ' selected' : '') + '>' + ((h % 12) || 12) + ':' + (m ? m : '00') + (h < 12 ? ' AM' : ' PM') + '</option>';
+    }
+    return out;
+  }
+  function whenLabel(date, time) {
+    if (!date || !time) return '';
+    var h = +time.slice(0, 2);
+    return new Date(date + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) +
+      ' at ' + ((h % 12) || 12) + ':' + time.slice(3) + (h < 12 ? ' AM' : ' PM') + ' (Edmonton time)';
+  }
+  function shortWhen(iso) {
+    return new Date(iso).toLocaleString('en-US', { timeZone: 'America/Edmonton', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+  function scheduledFor(key) {
+    return state.jobs.filter(function (j) { return (j.status === 'scheduled' || j.status === 'sending') && j.month === state.month && j.keys.indexOf(key) >= 0 && !(j.results || {})[key]; })[0];
+  }
+  // When automatic mode will email this child (if it's still ahead this month).
+  function autoDate(c) {
+    var a = state.auto; if (!a || !a.enabled) return '';
+    var today = mtToday(), y = state.year, day = c.birthDay;
+    if (!day) { if (a.noDay !== 'first') return ''; day = 1; }
+    if (c.birthMonth === 2 && day === 29 && !(y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0))) day = 28;
+    var date = y + '-' + (c.birthMonth < 10 ? '0' : '') + c.birthMonth + '-' + (day < 10 ? '0' : '') + day;
+    var nowHour = +new Date().toLocaleString('en-US', { timeZone: 'America/Edmonton', hour: 'numeric', hourCycle: 'h23' });
+    if (date < today || (date === today && nowHour >= a.hour + 1)) return '';
+    return MONTHS[c.birthMonth - 1].slice(0, 3) + ' ' + day + ', ' + hourLabel(a.hour);
+  }
+  function loadJobs() {
+    return api('/api/admin/birthday-schedule').then(function (d) {
+      state.jobs = d.jobs || []; state.auto = d.auto; state.autoState = d.autoState || {}; state.upcoming = d.upcoming || [];
+      return d;
+    }).catch(function () { return null; });
+  }
+
+  $('autoHour').innerHTML = Array.from({ length: 24 }, function (_, h) { return '<option value="' + h + '">' + hourLabel(h) + '</option>'; }).join('');
+  function renderAuto() {
+    var a = state.auto || { enabled: false, hour: 9, noDay: 'first' }, st = state.autoState || {};
+    $('autoOn').checked = !!a.enabled;
+    $('autoHour').value = String(a.hour);
+    $('autoNoDay').value = a.noDay;
+    $('autoPill').className = 'pill ' + (a.enabled ? 'sent' : 'cancelled');
+    $('autoPill').textContent = a.enabled ? 'On' : 'Off';
+    var msg = '';
+    if (a.enabled) {
+      msg = 'On: each birthday email goes out at ' + hourLabel(a.hour) + ' on the day.';
+      if (st.lastRunAt) msg += ' Last checked ' + shortWhen(st.lastRunAt) + '.';
+    }
+    $('autoStatus').innerHTML = esc(msg) + (st.lastError && a.enabled ? '<div style="color:#fca5a5;margin-top:6px">' + esc(st.lastError) + '</div>' : '');
+    $('autoStatus').style.color = 'var(--muted)';
+    var up = state.upcoming || [];
+    $('upcomingWrap').classList.toggle('hidden', !a.enabled);
+    $('upcoming').innerHTML = up.length ? up.map(function (u) {
+      var d = new Date(u.date + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+      return '<li><b>' + esc(d) + '</b><span>' + esc(u.names.join(', ')) + '</span></li>';
+    }).join('') : '<li><span>No birthdays in the next 2 weeks.</span></li>';
+  }
+  function jobStatus(j) {
+    var r = j.results || {}, sent = 0, skipped = 0, failed = 0;
+    Object.keys(r).forEach(function (k) { if (r[k].result === 'sent') sent++; else if (r[k].result === 'failed') failed++; else skipped++; });
+    if (j.status === 'scheduled') return '<span class="pill scheduled">🕒 Scheduled</span>';
+    if (j.status === 'cancelled') return '<span class="pill cancelled">Cancelled</span>';
+    var parts = [sent + ' sent']; if (skipped) parts.push(skipped + ' skipped'); if (failed) parts.push(failed + ' failed');
+    var reasons = Object.keys(r).filter(function (k) { return r[k].result !== 'sent'; }).map(function (k) {
+      var i = j.keys.indexOf(k); return (j.names[i] || 'Child') + ': ' + (r[k].reason || r[k].result);
+    });
+    return (j.status === 'done' ? '<span class="pill sent">✓ Done</span>' : '<span class="pill sending">Sending…</span>') +
+      '<div class="names" style="margin-top:4px" title="' + esc(reasons.join('\n')) + '">' + esc(parts.join(' · ')) + '</div>' +
+      (j.lastError ? '<div class="names" style="color:#fca5a5">' + esc(j.lastError) + '</div>' : '');
+  }
+  function renderJobs() {
+    var jobs = state.jobs.slice().sort(function (a, b) {
+      var ua = a.status === 'scheduled' ? 0 : 1, ub = b.status === 'scheduled' ? 0 : 1;
+      if (ua !== ub) return ua - ub;
+      return ua === 0 ? (a.scheduledAt < b.scheduledAt ? -1 : 1) : (a.scheduledAt < b.scheduledAt ? 1 : -1);
+    });
+    $('jobsWrap').classList.toggle('hidden', !jobs.length);
+    $('jobsEmpty').classList.toggle('hidden', jobs.length > 0);
+    $('jobRows').innerHTML = jobs.map(function (j) {
+      var names = j.names.slice(0, 6).join(', ') + (j.names.length > 6 ? ' and ' + (j.names.length - 6) + ' more' : '');
+      return '<tr><td><b>' + esc(shortWhen(j.scheduledAt)) + '</b></td>' +
+        '<td><b>' + j.names.length + '</b> ' + (j.names.length === 1 ? 'child' : 'children') + ' · ' + esc(MONTHS[j.month - 1]) + '<div class="names">' + esc(names) + '</div></td>' +
+        '<td>' + jobStatus(j) + '</td>' +
+        '<td>' + (j.status === 'scheduled' ? '<button class="btn ghost" style="padding:7px 12px;font-size:0.8rem" data-cancel-job="' + esc(j.id) + '">✖ Cancel</button>' : '') + '</td></tr>';
+    }).join('');
+  }
+  function loadSchedule() {
+    return loadJobs().then(function (d) {
+      if (!d) { $('autoStatus').textContent = 'Could not load. Please refresh.'; return; }
+      renderAuto(); renderJobs();
+    });
+  }
+  $('jobRows').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); var id = b && b.getAttribute('data-cancel-job');
+    if (!id || !confirm('Cancel this scheduled send? Nobody in it will be emailed.')) return;
+    b.disabled = true;
+    api('/api/admin/birthday-schedule', { method: 'POST', body: JSON.stringify({ action: 'cancel', id: id }) })
+      .then(function () { toast('Scheduled send cancelled.'); })
+      .catch(function (err) { toast(err.message, 'err'); })
+      .then(function () { loadSchedule().then(function () { if (state.month) renderRows(); }); });
+  });
+  $('autoSave').addEventListener('click', function () {
+    var on = $('autoOn').checked;
+    if (on && !state.emailConfigured) { toast('Email isn\'t switched on yet (RESEND_API_KEY missing in Netlify).', 'err'); return; }
+    var btn = $('autoSave'); btn.disabled = true;
+    api('/api/admin/birthday-schedule', { method: 'PUT', body: JSON.stringify({ enabled: on, hour: +$('autoHour').value, noDay: $('autoNoDay').value }) })
+      .then(function (d) {
+        state.auto = d.auto; state.upcoming = d.upcoming || [];
+        renderAuto(); if (state.month) renderRows();
+        toast(on ? 'Automatic birthday emails are on.' : 'Automatic birthday emails are off.');
+      })
+      .catch(function (err) { toast(err.message, 'err'); })
+      .then(function () { btn.disabled = false; });
+  });
+
+  $('schedBtn').addEventListener('click', function () {
+    var list = selectedChildren();
+    if (!list.length) return;
+    if (!state.emailConfigured) { toast('Email isn\'t switched on yet (RESEND_API_KEY missing in Netlify).', 'err'); return; }
+    var already = list.filter(function (c) { return c.status === 'sent'; }).length;
+    var dirty = isDirty();
+    var today = mtToday();
+    modal(
+      '<h2>🕒 Schedule ' + list.length + ' birthday email' + (list.length === 1 ? '' : 's') + '</h2>' +
+      '<div class="sched-grid"><div><label for="sDate">Date</label><input type="date" id="sDate" min="' + today + '" max="' + addDays(today, 365) + '" value="' + addDays(today, 1) + '"></div>' +
+      '<div><label for="sTime">Time (Edmonton)</label><select id="sTime">' + timeOptions('10:00') + '</select></div></div>' +
+      '<div class="sched-when" id="sWhen"></div>' +
+      '<p style="margin-top:12px">They\'ll use your saved Email Template as it is at that time. You can cancel this under <b>Scheduled &amp; Automatic</b> until then, and you don\'t need to keep this page open.</p>' +
+      (already ? '<p style="color:#fcd34d">' + already + ' of these ' + (already === 1 ? 'has' : 'have') + ' already been emailed this birthday and will be skipped.</p>' : '') +
+      (dirty ? '<p style="color:#fcd34d">Your template has unsaved changes. They\'ll be saved now.</p>' : '') +
+      '<div class="buttons"><button class="btn ghost" id="mCancel">Cancel</button>' +
+      '<button class="btn primary" id="mGo">🕒 Schedule</button></div>'
+    );
+    function upd() { $('sWhen').textContent = '📅 Sends ' + whenLabel($('sDate').value, $('sTime').value); }
+    $('sDate').addEventListener('input', upd); $('sTime').addEventListener('change', upd); upd();
+    $('mCancel').onclick = closeModal;
+    $('mGo').onclick = function () {
+      var date = $('sDate').value, time = $('sTime').value;
+      if (!date) { toast('Please pick a date.', 'err'); return; }
+      $('mGo').disabled = true; $('mGo').textContent = 'Scheduling…';
+      (dirty ? saveTemplate() : Promise.resolve()).then(function () {
+        return api('/api/admin/birthday-schedule', { method: 'POST', body: JSON.stringify({
+          action: 'schedule', month: state.month, keys: list.map(function (c) { return c.key; }), sendAt: date + 'T' + time }) });
+      }).then(function (d) {
+        closeModal();
+        state.selected = {};
+        toast('Scheduled for ' + d.job.when + ' (Edmonton time).');
+        return loadJobs().then(renderRows);
+      }).catch(function (err) {
+        toast(err.message, 'err');
+        if ($('mGo')) { $('mGo').disabled = false; $('mGo').textContent = '🕒 Schedule'; }
+      });
+    };
+  });
 
   // ---------- start ----------
   var started = false;

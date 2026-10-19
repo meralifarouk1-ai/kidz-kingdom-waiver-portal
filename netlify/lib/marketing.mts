@@ -236,7 +236,8 @@ export async function sendBatch(emails: any[], idempotencyKey: string): Promise<
     }
     return { ok: false, status: res.status, detail };
   }
-  throw new SendError("Resend is busy right now. Sending is paused; press Resume in a minute.", true);
+  // Not a permanent problem, so scheduled sends simply try again on the next run.
+  throw new SendError("Resend is busy right now. Sending is paused; press Resume in a minute.", false);
 }
 
 // ---------------- Campaigns ----------------
@@ -248,8 +249,13 @@ export type Campaign = {
   settings: MarketingSettings;
   siteUrl: string;
   createdAt: string;
+  startedAt?: string;
   finishedAt?: string;
-  status: "sending" | "paused" | "done";
+  status: "scheduled" | "sending" | "paused" | "done" | "cancelled";
+  scheduledAt?: string; // UTC; set for scheduled campaigns
+  estimate?: number; // audience size when it was scheduled
+  auto?: boolean; // sent by the background scheduler (no page needs to stay open)
+  userPaused?: boolean;
   total: number;
   cursor: number; // recipients handled so far (sent or failed)
   sent: number;
@@ -263,9 +269,57 @@ export type Campaign = {
 const campaignKey = (id: string) => `campaign-${id}`;
 const recipientsKey = (id: string) => `recipients-${id}`;
 
+const newCampaignId = () => new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-" + randomBytes(5).toString("hex");
+
+// A campaign to go out later. The audience is worked out when it starts, so
+// families who sign a waiver (or unsubscribe) in the meantime are counted.
+export async function scheduleCampaign(draft: Draft, settings: MarketingSettings, siteUrl: string, at: Date) {
+  const { recipients } = await buildAudience();
+  const c: Campaign = {
+    id: newCampaignId(),
+    subject: draft.subject,
+    body: draft.body,
+    settings,
+    siteUrl,
+    createdAt: new Date().toISOString(),
+    scheduledAt: at.toISOString(),
+    estimate: recipients.length,
+    status: "scheduled",
+    auto: true,
+    total: 0,
+    cursor: 0,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    failures: [],
+  };
+  await store().setJSON(campaignKey(c.id), c);
+  return c;
+}
+
+export async function cancelCampaign(id: string) {
+  const c = await getCampaign(id);
+  if (!c) return null;
+  if (c.status !== "scheduled") throw new SendError("This email has already started sending, so it can't be cancelled. You can pause it instead.");
+  c.status = "cancelled";
+  await saveCampaign(c);
+  return c;
+}
+
+// Freezes the audience of a scheduled campaign when its time comes.
+async function startScheduled(c: Campaign) {
+  const { recipients } = await buildAudience();
+  await store().setJSON(recipientsKey(c.id), recipients);
+  c.status = "sending";
+  c.total = recipients.length;
+  c.startedAt = new Date().toISOString();
+  if (!c.total) { c.status = "done"; c.finishedAt = c.startedAt; }
+  await saveCampaign(c);
+}
+
 export async function createCampaign(draft: Draft, settings: MarketingSettings, siteUrl: string) {
   const { recipients } = await buildAudience();
-  const id = new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-" + randomBytes(5).toString("hex");
+  const id = newCampaignId();
   const c: Campaign = {
     id,
     subject: draft.subject,
@@ -306,25 +360,33 @@ export async function listCampaigns() {
 }
 
 // Sends the next few batches of a campaign and records progress.
-export async function continueCampaign(id: string) {
+// By default (the page's "send" loop) a few batches per call; the background
+// scheduler passes a bigger budget.
+export async function continueCampaign(id: string, opts: { maxBatches?: number; budgetMs?: number; fromScheduler?: boolean } = {}) {
+  const maxBatches = opts.maxBatches ?? BATCHES_PER_CALL;
+  const budgetMs = opts.budgetMs ?? 7000;
   const c = await getCampaign(id);
   if (!c) throw new SendError("That campaign wasn't found.");
-  if (c.status === "done") return c;
+  if (c.status === "done" || c.status === "cancelled") return c;
+  if (c.status === "scheduled") throw new SendError("This email is scheduled and hasn't started yet.");
   const now = Date.now();
   if (c.lockUntil && c.lockUntil > now) {
+    if (opts.fromScheduler) return c;
     throw new SendError("This campaign is already being sent from another window. Please wait.");
   }
   c.status = "sending";
   c.lastError = undefined;
-  c.lockUntil = now + 25000;
+  if (!opts.fromScheduler) c.userPaused = false; // someone pressed Resume
+  c.lockUntil = now + budgetMs + 18000;
   await saveCampaign(c);
 
   const recipients: Recipient[] = (await getJSONWithRetry(store(), recipientsKey(id), 4)) || [];
   const optedOut = await optedOutHashes(); // honour unsubscribes that arrive mid-campaign
-  const deadline = now + 7000;
+  const deadline = now + budgetMs;
 
   try {
-    for (let n = 0; n < BATCHES_PER_CALL && c.cursor < recipients.length && Date.now() < deadline; n++) {
+    for (let n = 0; n < maxBatches && c.cursor < recipients.length && Date.now() < deadline; n++) {
+      if (n > 0) await sleep(550); // stay under Resend's requests-per-second limit
       const start = c.cursor;
       const chunk = recipients.slice(start, start + BATCH_SIZE);
       const sendable = chunk.filter((r) => !optedOut.has(emailHash(r.email)));
@@ -337,14 +399,20 @@ export async function continueCampaign(id: string) {
         } else {
           // One bad address fails a whole batch, so send that batch one by one
           // to find it and still deliver to everyone else.
+          // Counts are only recorded once the whole batch is through; if time
+          // runs out part-way, the retry replays the same idempotency keys, so
+          // nobody gets a second copy and nothing is counted twice.
+          let ok = 0;
+          const bad: { email: string; reason: string }[] = [];
           for (let i = 0; i < sendable.length; i++) {
+            if (Date.now() > deadline + 9000) throw new SendError("Sending was split across runs; it carries on shortly.", false);
             const one = await sendBatch([emails[i]], `kk-mkt/${c.id}-${start}-${i}`);
-            if (one.ok) c.sent++;
-            else {
-              c.failed++;
-              if (c.failures.length < 200) c.failures.push({ email: sendable[i].email, reason: one.detail || `error ${one.status}` });
-            }
+            if (one.ok) ok++;
+            else bad.push({ email: sendable[i].email, reason: one.detail || `error ${one.status}` });
           }
+          c.sent += ok;
+          c.failed += bad.length;
+          for (const f of bad) if (c.failures.length < 200) c.failures.push(f);
         }
       }
       c.skipped = (c.skipped || 0) + skipped;
@@ -355,13 +423,18 @@ export async function continueCampaign(id: string) {
       c.status = "done";
       c.finishedAt = new Date().toISOString();
     } else {
-      // Not finished: the page calls again straight away. If the page was
-      // closed, the campaign shows as unfinished with a Resume button.
-      c.status = "paused";
+      // Not finished. Page-driven sends: the page calls again straight away;
+      // if it was closed, the campaign shows a Resume button. Scheduled sends
+      // carry on by themselves on the scheduler's next run.
+      c.status = c.auto ? "sending" : "paused";
     }
   } catch (err: any) {
-    c.status = "paused";
+    const fatal = !(err instanceof SendError) || err.stopAll;
+    // Scheduled sends retry passing problems on the next run; anything that
+    // needs a person (API key, domain, plan limit) pauses until Resume.
+    c.status = c.auto && !fatal ? "sending" : "paused";
     c.lastError = err instanceof SendError ? err.message : "Sending stopped unexpectedly. Press Resume to continue.";
+    if (c.auto && !fatal) c.lastError += " (It will try again automatically in a few minutes.)";
     console.error("campaign paused", id, err);
   } finally {
     c.lockUntil = 0;
@@ -372,8 +445,9 @@ export async function continueCampaign(id: string) {
 
 export async function pauseCampaign(id: string) {
   const c = await getCampaign(id);
-  if (!c || c.status === "done") return c;
+  if (!c || c.status === "done" || c.status === "scheduled" || c.status === "cancelled") return c;
   c.status = "paused";
+  c.userPaused = true;
   c.lockUntil = 0;
   await saveCampaign(c);
   return c;
@@ -382,4 +456,28 @@ export async function pauseCampaign(id: string) {
 export function publicCampaign(c: Campaign) {
   const { body, settings, ...rest } = c;
   return rest;
+}
+
+// ---------------- Background scheduler ----------------
+
+// Starts scheduled campaigns whose time has come and keeps scheduled sends
+// going until done (the page doesn't need to stay open).
+export async function runMarketingSchedules(until: number) {
+  const { blobs } = await store().list({ prefix: "campaign-" });
+  const all = (await Promise.all(blobs.map((b: any) => getJSONWithRetry(store(), b.key, 3).catch(() => null)))).filter(Boolean) as Campaign[];
+  const now = Date.now();
+  const due = all
+    .filter((c) => (c.status === "scheduled" && Date.parse(c.scheduledAt || "") <= now) || (c.auto && c.status === "sending" && !c.userPaused))
+    .sort((a, b) => ((a.scheduledAt || a.createdAt) < (b.scheduledAt || b.createdAt) ? -1 : 1));
+  for (const c of due) {
+    if (Date.now() > until - 3000) return;
+    try {
+      if (c.status === "scheduled") await startScheduled(c);
+      if (c.status === "sending") {
+        await continueCampaign(c.id, { maxBatches: 60, budgetMs: Math.max(0, until - Date.now() - 2000), fromScheduler: true });
+      }
+    } catch (err) {
+      console.error("scheduled campaign error", c.id, err);
+    }
+  }
 }
