@@ -377,7 +377,11 @@
     fetch('/api/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: password }) })
       .then(function (res) {
         if (!res.ok) throw new Error('Incorrect password');
-        try { sessionStorage.setItem('kk_admin_pw', password); } catch (e) {}
+        return res.json();
+      })
+      .then(function (d) {
+        if (d.role !== 'admin') throw new Error('This page needs the Super Admin password.');
+        try { sessionStorage.setItem('kk_admin_pw', password); sessionStorage.setItem('kk_role', 'admin'); } catch (e) {}
         showApp();
       })
       .catch(function (err) { $('loginError').textContent = err.message; });
@@ -822,7 +826,12 @@
     loadTemplate().catch(function (err) { toast(err.message, 'err'); });
     search();
   }
-  if (pw()) showApp(); else showLogin();
+  var savedRole = '';
+  try { savedRole = sessionStorage.getItem('kk_role') || ''; } catch (e) {}
+  if (pw() && savedRole === 'frontdesk') {
+    // Front desk logins can't use this page: send them back to Check In.
+    window.location.replace('/admin.html');
+  } else if (pw()) showApp(); else showLogin();
 })();
 </script>
 </body>

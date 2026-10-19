@@ -1,12 +1,13 @@
 import type { Context, Config } from "@netlify/functions";
-import { isAuthorized, loadIndex } from "../lib/waiver.mts";
+import { loadIndex } from "../lib/waiver.mts";
+import { roleFor } from "../lib/auth.mts";
 
 export default async (req: Request, context: Context) => {
   if (req.method !== "GET") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
   }
 
-  if (!isAuthorized(req)) {
+  if (!(await roleFor(req))) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
 

@@ -79,6 +79,25 @@
     padding: 24px 18px;
   }
   .sidebar .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .role-badge { display: inline-block; margin: 0 0 18px; padding: 4px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+  .role-badge.admin { background: rgba(168,85,247,0.18); color: #d8b4fe; border: 1px solid rgba(168,85,247,0.4); }
+  .role-badge.frontdesk { background: rgba(34,197,94,0.15); color: #86efac; border: 1px solid rgba(34,197,94,0.4); }
+  .logout { margin-top: 18px; width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; text-align: left; font-size: 0.9rem; }
+  .logout:hover { color: var(--ink); }
+  .navitem.admin-only.hidden-role, .admin-only.hidden-role { display: none !important; }
+  .access-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 18px; max-width: 720px; }
+  .access-card h2 { margin: 0 0 6px; font-size: 1.1rem; }
+  .access-card p { color: var(--muted); font-size: 0.9rem; line-height: 1.55; margin: 0 0 12px; }
+  .access-card ul { color: var(--muted); font-size: 0.9rem; line-height: 1.7; margin: 0 0 12px; padding-left: 20px; }
+  .access-card input { padding: 11px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); color: var(--ink); font-size: 0.95rem; min-width: 220px; }
+  .access-card .row-inline { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .access-card button { padding: 11px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); color: var(--ink); font-weight: 600; cursor: pointer; }
+  .access-card button.primary { background: var(--green); border-color: var(--green); color: #06240f; }
+  .access-card button.danger { color: #f87171; }
+  .access-status { font-weight: 700; }
+  .access-status.on { color: #4ade80; }
+  .access-status.off { color: var(--muted); }
+  .access-msg { font-size: 0.85rem; margin-top: 10px; min-height: 1em; }
   .sidebar .brand img { height: 34px; }
   .sidebar .brand-text { font-weight: 700; font-size: 1.05rem; }
   .sidebar .sub { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 26px; }
@@ -245,13 +264,16 @@
   <div class="sidebar">
     <div class="brand"><img src="/assets/logo.png" alt="logo"><span class="brand-text">Kidz Kingdom</span></div>
     <div class="sub">Waiver Admin</div>
+    <span class="role-badge" id="roleBadge"></span>
     <div class="navitem active" data-tab="checkin">✅ Check In</div>
-    <div class="navitem" data-tab="history">🕘 History</div>
-    <div class="navitem" data-tab="all">📋 All Submissions</div>
-    <div class="navitem" data-tab="date">📅 By Date</div>
-    <div class="navitem" data-tab="search">🔍 Search</div>
-    <div class="navitem" data-tab="birthdays">🎂 Birthdays</div>
-    <div class="navitem" data-tab="marketing">📣 Marketing</div>
+    <div class="navitem admin-only" data-tab="history">🕘 History</div>
+    <div class="navitem admin-only" data-tab="all">📋 All Submissions</div>
+    <div class="navitem admin-only" data-tab="date">📅 By Date</div>
+    <div class="navitem admin-only" data-tab="search">🔍 Search</div>
+    <div class="navitem admin-only" data-tab="birthdays">🎂 Birthdays</div>
+    <div class="navitem admin-only" data-tab="marketing">📣 Marketing</div>
+    <div class="navitem admin-only" data-tab="access">⚙️ Staff Access</div>
+    <button class="logout" id="logoutBtn">🚪 Log out</button>
   </div>
 
   <div class="content">
@@ -320,6 +342,35 @@
         <tbody id="histBody"></tbody>
       </table>
       <div class="empty-state" id="histEmpty" style="display:none;">No check-ins in this period.</div>
+    </div>
+
+    <!-- ===== Tab: Staff Access (Super Admin only) ===== -->
+    <div class="panel" id="panel-access">
+      <h1>Staff Access</h1>
+      <div class="access-card">
+        <h2>Super Admin <span class="role-badge admin" style="margin:0 0 0 6px">You</span></h2>
+        <p>Full access to everything. This is the password set in Netlify as <code>ADMIN_PASSWORD</code>. Keep it to owners and managers.</p>
+      </div>
+      <div class="access-card">
+        <h2>Front Desk login: <span class="access-status" id="fdStatus">…</span></h2>
+        <p>For staff at the counter. With this password they can only:</p>
+        <ul>
+          <li>search for families and check them in</li>
+          <li>see today's counters and today's entries</li>
+          <li>undo a check-in from the last 10 minutes, to fix a mistake</li>
+        </ul>
+        <p>They <b>can't</b> open or download waivers, delete anything, export, see History, Birthdays, Marketing or this page.</p>
+        <div class="row-inline">
+          <input type="password" id="fdPw1" placeholder="New Front Desk password" autocomplete="new-password">
+          <input type="password" id="fdPw2" placeholder="Type it again" autocomplete="new-password">
+          <button class="primary" id="fdSave">Save password</button>
+        </div>
+        <div class="row-inline" style="margin-top:12px">
+          <button class="danger" id="fdDisable">Turn off Front Desk login</button>
+        </div>
+        <div class="access-msg" id="fdMsg"></div>
+        <p style="margin-top:12px">Changing the password (or turning it off) logs out every front-desk device straight away. Do this when a staff member leaves.</p>
+      </div>
     </div>
 
     <!-- ===== Tab: All Submissions ===== -->
@@ -610,6 +661,7 @@
       if (tab === 'birthdays') applyBirthdayFilter();
       if (tab === 'checkin') { loadCheckins(); setTimeout(function () { document.getElementById('ciSearch_kk').focus(); }, 50); }
       if (tab === 'history') loadHistory();
+      if (tab === 'access') loadAccess();
     });
   });
 
@@ -623,7 +675,11 @@
       body: JSON.stringify({ password: password })
     }).then(function (res) {
       if (!res.ok) throw new Error('Incorrect password');
+      return res.json();
+    }).then(function (d) {
       sessionStorage.setItem('kk_admin_pw', password);
+      sessionStorage.setItem('kk_role', d.role || 'admin');
+      applyRole(d.role || 'admin');
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('dashboard').classList.add('show');
       loadData();
@@ -640,9 +696,35 @@
     if (e.key === 'Enter') tryLogin(this.value);
   });
 
+  // ---- Roles ----
+  function role() { return sessionStorage.getItem('kk_role') || ''; }
+  function isAdmin() { return role() === 'admin'; }
+  function applyRole(r) {
+    var badge = document.getElementById('roleBadge');
+    badge.className = 'role-badge ' + r;
+    badge.textContent = r === 'admin' ? 'Super Admin' : 'Front Desk';
+    document.querySelectorAll('.admin-only').forEach(function (el) { el.classList.toggle('hidden-role', r !== 'admin'); });
+    if (r !== 'admin') {
+      // Front desk always works on the Check In screen.
+      navItems.forEach(function (n) { n.classList.toggle('active', n.getAttribute('data-tab') === 'checkin'); });
+      document.querySelectorAll('.panel').forEach(function (p) { p.classList.toggle('active', p.id === 'panel-checkin'); });
+    }
+  }
+  document.getElementById('logoutBtn').addEventListener('click', function () {
+    sessionStorage.removeItem('kk_admin_pw');
+    sessionStorage.removeItem('kk_role');
+    location.reload();
+  });
+
   if (pw()) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('dashboard').classList.add('show');
+    if (role()) applyRole(role());
+    // Confirm the saved login (and its role) is still valid.
+    fetch('/api/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw() }) })
+      .then(function (res) { if (!res.ok) throw new Error('expired'); return res.json(); })
+      .then(function (d) { sessionStorage.setItem('kk_role', d.role); applyRole(d.role); })
+      .catch(function () { sessionStorage.removeItem('kk_admin_pw'); sessionStorage.removeItem('kk_role'); location.reload(); });
     loadData();
     setTimeout(loadCheckins, 0);
   }
@@ -982,10 +1064,15 @@
         : '<span class="tag in">Checked in</span>';
       return '<tr><td>' + timeStr(r.at) + '</td><td>' + escapeHtml(r.name) + '</td><td>' + escapeHtml(r.kids.join(', ')) +
         ' <span class="muted">(' + r.kids.length + ')</span></td><td>' + escapeHtml(r.phone) + '</td><td>' + tag + '</td><td>' +
-        (r.id ? '<button class="link-btn" data-undo="' + escapeHtml(r.id) + '">Undo</button>' : '') + '</td></tr>';
+        (r.id && canUndo(r.id) ? '<button class="link-btn" data-undo="' + escapeHtml(r.id) + '">Undo</button>' : '') + '</td></tr>';
     }).join('');
   }
 
+  function canUndo(id) {
+    if (isAdmin()) return true;
+    var madeAt = Number(((id || '').split('/')[1] || '').split('-')[0]);
+    return madeAt && Date.now() - madeAt < 10 * 60 * 1000;
+  }
   function lastCheckinToday(waiverId) {
     var list = (ci.summary && ci.summary.checkIns) || [];
     for (var i = 0; i < list.length; i++) if (list[i].waiverId === waiverId) return list[i];
@@ -1016,7 +1103,7 @@
       var kids = kidNames(s), last = lastCheckinToday(s.id), just = ci.justChecked[s.id];
       var signedToday = mtDateStr(new Date(s.submittedAt)) === ci.today;
       var ticks = prevTicks[s.id];
-      var status = just ? '<div class="ci-status ok">✓ Checked in at ' + timeStr(just.checkedInAt) + ' (' + just.kids + ' kid' + (just.kids === 1 ? '' : 's') + ') · <button class="link-btn" data-undo="' + escapeHtml(just.id) + '">Undo</button></div>'
+      var status = just ? '<div class="ci-status ok">✓ Checked in at ' + timeStr(just.checkedInAt) + ' (' + just.kids + ' kid' + (just.kids === 1 ? '' : 's') + ')' + (canUndo(just.id) ? ' · <button class="link-btn" data-undo="' + escapeHtml(just.id) + '">Undo</button>' : '') + '</div>'
         : last ? '<div class="ci-status warn">Already checked in today at ' + timeStr(last.checkedInAt) + '</div>'
         : signedToday ? '<div class="ci-status warn">Signed their waiver today, so they already count as an entry. Checking in is optional.</div>' : '';
       return '<div class="ci-card' + (just ? ' done' : '') + '" data-id="' + s.id + '">' +
@@ -1075,6 +1162,36 @@
     var active = document.getElementById('panel-checkin').classList.contains('active');
     if (active && document.visibilityState === 'visible' && pw()) loadCheckins();
   }, 30000);
+
+  // ---- Staff Access ----
+  function accessMsg(text, ok) {
+    var m = document.getElementById('fdMsg'); m.textContent = text; m.style.color = ok ? '#4ade80' : '#fca5a5';
+  }
+  function showAccess(d) {
+    var st = document.getElementById('fdStatus');
+    st.className = 'access-status ' + (d.enabled ? 'on' : 'off');
+    st.textContent = d.enabled ? 'On' + (d.updatedAt ? ' (password set ' + mtDate(new Date(d.updatedAt)) + ')' : '') : 'Off';
+    document.getElementById('fdDisable').style.display = d.enabled ? '' : 'none';
+    document.getElementById('fdSave').textContent = d.enabled ? 'Change password' : 'Turn on with this password';
+  }
+  function loadAccess() {
+    checkinApi('/api/admin/staff-access').then(showAccess).catch(function (err) { accessMsg(err.message); });
+  }
+  document.getElementById('fdSave').addEventListener('click', function () {
+    var a = document.getElementById('fdPw1').value, b = document.getElementById('fdPw2').value;
+    if (a.length < 6) return accessMsg('Please use at least 6 characters.');
+    if (a !== b) return accessMsg('The two passwords don\'t match.');
+    checkinApi('/api/admin/staff-access', { method: 'PUT', body: JSON.stringify({ password: a }) }).then(function (d) {
+      document.getElementById('fdPw1').value = ''; document.getElementById('fdPw2').value = '';
+      showAccess(d); accessMsg('Saved. Front desk staff log in with this password on the same admin page.', true);
+    }).catch(function (err) { accessMsg(err.message); });
+  });
+  document.getElementById('fdDisable').addEventListener('click', function () {
+    if (!confirm('Turn off the Front Desk login? Every front-desk device will be logged out.')) return;
+    checkinApi('/api/admin/staff-access', { method: 'DELETE' }).then(function (d) {
+      showAccess(d); accessMsg('Front Desk login turned off.', true);
+    }).catch(function (err) { accessMsg(err.message); });
+  });
 
   // ---- History ----
   var hist = { data: null };

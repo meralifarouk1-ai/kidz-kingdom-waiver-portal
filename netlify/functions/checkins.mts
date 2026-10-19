@@ -1,5 +1,6 @@
 import type { Context, Config } from "@netlify/functions";
-import { isAuthorized, MT_TZ } from "../lib/waiver.mts";
+import { MT_TZ } from "../lib/waiver.mts";
+import { roleFor } from "../lib/auth.mts";
 import { daySummary, historyBetween, isDate, mtDate } from "../lib/checkin.mts";
 
 const json = (data: unknown, status = 200) =>
@@ -15,8 +16,12 @@ function csvCell(v: unknown) {
 // add &format=csv to the history request to download it
 export default async (req: Request, context: Context) => {
   if (req.method !== "GET") return json({ error: "Method not allowed" }, 405);
-  if (!isAuthorized(req)) return json({ error: "Unauthorized" }, 401);
+  const role = await roleFor(req);
+  if (!role) return json({ error: "Unauthorized" }, 401);
   const q = new URL(req.url).searchParams;
+  if (role !== "admin" && (q.get("from") || q.get("to") || (q.get("date") && q.get("date") !== mtDate()))) {
+    return json({ error: "Only the Super Admin can see check-in history." }, 403);
+  }
 
   try {
     if (q.get("from") || q.get("to")) {
