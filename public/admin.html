@@ -133,6 +133,9 @@
   .ci-stats .stat-card.total { background: linear-gradient(135deg, rgba(168,85,247,0.25), rgba(236,72,153,0.22)); border-color: rgba(236,72,153,0.5); }
   .ci-stats .stat-card.total .value { font-size: 2.8rem; }
   .ci-stats .stat-card .sub b { color: var(--ink); }
+  .ci-stats .stat-card .unit { font-size: 1rem; font-weight: 600; color: var(--muted); }
+  .ci-stats .stat-card .kids-line { font-size: 1.15rem; font-weight: 700; margin: 2px 0 6px; }
+  .ci-note { color: var(--muted); font-size: 0.85rem; margin: -6px 0 16px; }
   .ci-search { width: 100%; padding: 16px 18px; font-size: 1.1rem; border-radius: 12px; border: 2px solid var(--border); background: var(--panel); color: var(--ink); }
   .ci-search:focus { outline: none; border-color: var(--accent); }
   .ci-results { display: grid; gap: 12px; margin: 14px 0 26px; }
@@ -285,21 +288,25 @@
 
       <div class="ci-stats">
         <div class="stat-card">
-          <div class="label">Checked In Today</div>
-          <div class="value" id="ciCheckedFamilies">0</div>
-          <div class="sub"><b id="ciCheckedKids">0</b> kids checked in</div>
+          <div class="label">Returning Families</div>
+          <div class="value"><span id="ciRetFamilies">0</span> <span class="unit">families</span></div>
+          <div class="kids-line"><span id="ciRetKids">0</span> kids</div>
+          <div class="sub">checked in with a waiver from an earlier visit</div>
         </div>
         <div class="stat-card">
-          <div class="label">New Waivers Today</div>
-          <div class="value" id="ciNewFamilies">0</div>
-          <div class="sub"><b id="ciNewKids">0</b> kids on waivers signed today</div>
+          <div class="label">New Families</div>
+          <div class="value"><span id="ciNewFamilies">0</span> <span class="unit">families</span></div>
+          <div class="kids-line"><span id="ciNewKids">0</span> kids</div>
+          <div class="sub">signed a new waiver today</div>
         </div>
         <div class="stat-card total">
           <div class="label">Total Entries Today</div>
-          <div class="value" id="ciTotalFamilies">0</div>
-          <div class="sub"><b id="ciTotalKids">0</b> kids · checked in + new waivers, each family counted once</div>
+          <div class="value"><span id="ciTotalFamilies">0</span> <span class="unit">families</span></div>
+          <div class="kids-line"><span id="ciTotalKids">0</span> kids</div>
+          <div class="sub" id="ciTotalSum">returning + new</div>
         </div>
       </div>
+      <p class="ci-note" id="ciDeskNote"></p>
 
       <input type="text" class="ci-search" id="ciSearch_kk" placeholder="🔍 Search a parent or child name, or phone number, to check them in…" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
       <div class="close-note" id="ciCloseNote" style="display:none;margin-top:12px"></div>
@@ -329,7 +336,7 @@
 
       <div class="section-title">Daily totals</div>
       <table>
-        <thead><tr><th>Date</th><th>Checked in</th><th>New waivers</th><th>Total entries</th></tr></thead>
+        <thead><tr><th>Date</th><th>Returning families</th><th>New families</th><th>Total entries</th></tr></thead>
         <tbody id="histDays"></tbody>
       </table>
 
@@ -1041,12 +1048,18 @@
   function renderCheckinStats() {
     var d = ci.summary; if (!d) return;
     document.getElementById('ciDate').textContent = mtDateLong(d.date);
-    document.getElementById('ciCheckedFamilies').textContent = d.checkedIn.families;
-    document.getElementById('ciCheckedKids').textContent = d.checkedIn.kids;
+    // Returning + New = Total, for families and for kids.
+    document.getElementById('ciRetFamilies').textContent = d.returning.families;
+    document.getElementById('ciRetKids').textContent = d.returning.kids;
     document.getElementById('ciNewFamilies').textContent = d.newWaivers.families;
-    document.getElementById('ciNewKids').textContent = d.newWaivers.kids;
+    document.getElementById('ciNewKids').textContent = d.newWaivers.kidsEntered;
     document.getElementById('ciTotalFamilies').textContent = d.totalEntries.families;
     document.getElementById('ciTotalKids').textContent = d.totalEntries.kids;
+    document.getElementById('ciTotalSum').textContent = d.returning.families + ' returning + ' + d.newWaivers.families + ' new';
+    document.getElementById('ciDeskNote').textContent = d.checkedIn.families
+      ? 'Checked in at the desk today: ' + d.checkedIn.families + (d.checkedIn.families === 1 ? ' family' : ' families') + ' (' + d.checkedIn.kids + ' kids), ' +
+        d.newWaivers.alsoCheckedIn + ' of them new families.'
+      : '';
   }
   function renderToday() {
     var d = ci.summary; if (!d) return;
@@ -1228,10 +1241,10 @@
     var d = hist.data; if (!d) return;
     var tot = { cf: 0, ck: 0, nf: 0, nk: 0, tf: 0, tk: 0 };
     document.getElementById('histDays').innerHTML = d.days.map(function (x) {
-      tot.cf += x.checkedIn.families; tot.ck += x.checkedIn.kids; tot.nf += x.newWaivers.families; tot.nk += x.newWaivers.kids;
+      tot.cf += x.returning.families; tot.ck += x.returning.kids; tot.nf += x.newWaivers.families; tot.nk += x.newWaivers.kidsEntered;
       tot.tf += x.totalEntries.families; tot.tk += x.totalEntries.kids;
-      return '<tr><td>' + mtDateLong(x.date) + '</td><td>' + fk(x.checkedIn.families, x.checkedIn.kids) + '</td><td>' +
-        fk(x.newWaivers.families, x.newWaivers.kids) + '</td><td><b>' + fk(x.totalEntries.families, x.totalEntries.kids) + '</b></td></tr>';
+      return '<tr><td>' + mtDateLong(x.date) + '</td><td>' + fk(x.returning.families, x.returning.kids) + '</td><td>' +
+        fk(x.newWaivers.families, x.newWaivers.kidsEntered) + '</td><td><b>' + fk(x.totalEntries.families, x.totalEntries.kids) + '</b></td></tr>';
     }).join('') + (d.days.length > 1 ? '<tr class="totals-row"><td>Total</td><td>' + fk(tot.cf, tot.ck) + '</td><td>' +
       fk(tot.nf, tot.nk) + '</td><td>' + fk(tot.tf, tot.tk) + '</td></tr>' : '');
 

@@ -39,9 +39,9 @@ export default async (req: Request, context: Context) => {
           ]);
         }
         rows.push([]);
-        rows.push(["Date", "Checked-in families", "Checked-in kids", "New waivers", "Total entries (families)", "Total entries (kids)"]);
+        rows.push(["Date", "Returning families", "Returning kids", "New families", "New kids", "Total entries (families)", "Total entries (kids)", "All check-ins (families)", "All check-ins (kids)"]);
         for (const d of h.days) {
-          rows.push([d.date, String(d.checkedIn.families), String(d.checkedIn.kids), String(d.newWaivers.families), String(d.totalEntries.families), String(d.totalEntries.kids)]);
+          rows.push([d.date, String(d.returning.families), String(d.returning.kids), String(d.newWaivers.families), String(d.newWaivers.kidsEntered), String(d.totalEntries.families), String(d.totalEntries.kids), String(d.checkedIn.families), String(d.checkedIn.kids)]);
         }
         const csv = "﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
         return new Response(csv, {

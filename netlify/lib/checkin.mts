@@ -117,9 +117,10 @@ export function summarize(date: string, checkIns: CheckIn[], entries: any[]) {
   for (const c of byWaiver.values()) {
     if (!newIds.has(c.waiverId)) { returningFamilies++; returningKids += c.kids; }
   }
-  let newKids = 0;
+  let newKids = 0, newAlsoCheckedIn = 0;
   for (const w of newWaivers) {
     const c = byWaiver.get(w.id);
+    if (c) newAlsoCheckedIn++;
     newKids += c ? c.kids : childNames(w).length;
   }
 
@@ -130,7 +131,11 @@ export function summarize(date: string, checkIns: CheckIn[], entries: any[]) {
     newWaivers: {
       families: newWaivers.length,
       kids: newWaivers.reduce((s: number, w: any) => s + childNames(w).length, 0),
+      kidsEntered: newKids, // kids actually counted as entries (check-in count if they checked in)
+      alsoCheckedIn: newAlsoCheckedIn,
     },
+    // Families who checked in on an older waiver. Returning + new = total entries.
+    returning: { families: returningFamilies, kids: returningKids },
     totalEntries: { families: newWaivers.length + returningFamilies, kids: newKids + returningKids },
     checkIns,
     newWaiverList: newWaivers.map((w: any) => ({
@@ -154,7 +159,7 @@ export async function historyBetween(from: string, to: string) {
   }
   const days = datesBetween(from, to).reverse().map((d) => {
     const s = summarize(d, byDay.get(d) || [], entries);
-    return { date: d, checkedIn: s.checkedIn, newWaivers: s.newWaivers, totalEntries: s.totalEntries };
+    return { date: d, checkedIn: s.checkedIn, newWaivers: s.newWaivers, returning: s.returning, totalEntries: s.totalEntries };
   });
   return { from, to, checkIns, days, failedReads: failed };
 }
