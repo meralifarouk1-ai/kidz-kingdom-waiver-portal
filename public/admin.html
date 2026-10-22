@@ -275,6 +275,7 @@
     <div class="navitem admin-only" data-tab="search">🔍 Search</div>
     <div class="navitem admin-only" data-tab="birthdays">🎂 Birthdays</div>
     <div class="navitem admin-only" data-tab="marketing">📣 Marketing</div>
+    <div class="navitem admin-only" data-tab="deleted">🗑️ Recently Deleted</div>
     <div class="navitem admin-only" data-tab="access">⚙️ Staff Access</div>
     <button class="logout" id="logoutBtn">🚪 Log out</button>
   </div>
@@ -352,6 +353,28 @@
     </div>
 
     <!-- ===== Tab: Staff Access (Super Admin only) ===== -->
+    <div class="panel" id="panel-deleted">
+      <h1>Recently Deleted</h1>
+      <div class="access-card" style="max-width:none">
+        <p>Deleted waivers are kept here and can be put back with <b>Restore</b>. Every delete and restore is recorded below.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Deleted</th><th>Parent</th><th>Children</th><th>Phone</th><th>Signed</th><th></th></tr></thead>
+          <tbody id="trashRows"></tbody>
+        </table></div>
+        <div class="empty-state" id="trashEmpty" style="display:none">Nothing has been deleted.</div>
+      </div>
+      <div class="access-card" style="max-width:none">
+        <h2>Search old backups</h2>
+        <p>A copy of the whole waiver list is saved every night. Search it by name or phone to see whether a waiver was ever on file, and on which days.</p>
+        <div class="row-inline"><input type="text" id="backupQ" placeholder="Name or phone number"><button class="primary" id="backupBtn">Search backups</button></div>
+        <div class="access-msg" id="backupMsg" style="color:var(--muted)"></div>
+      </div>
+      <div class="access-card" style="max-width:none">
+        <h2>Activity log</h2>
+        <div id="auditList" class="access-msg" style="color:var(--muted)"></div>
+      </div>
+    </div>
+
     <div class="panel" id="panel-access">
       <h1>Staff Access</h1>
       <div class="access-card">
@@ -669,6 +692,7 @@
       if (tab === 'checkin') { loadCheckins(); setTimeout(function () { document.getElementById('ciSearch_kk').focus(); }, 50); }
       if (tab === 'history') loadHistory();
       if (tab === 'access') loadAccess();
+      if (tab === 'deleted') loadTrash();
     });
   });
 
@@ -1309,12 +1333,47 @@
 
   // ---- Delete ----
   function deleteSubmission(id) {
-    if (!confirm('Delete this waiver submission? This cannot be undone.')) return;
-    fetch('/api/admin/delete?id=' + encodeURIComponent(id), {
-      method: 'DELETE',
-      headers: { 'x-admin-password': pw() }
-    }).then(function () { loadData(); });
+    if (!confirm('Delete this waiver? It will move to Recently Deleted, where you can restore it.')) return;
+    checkinApi('/api/admin/delete?id=' + encodeURIComponent(id), { method: 'DELETE' })
+      .then(function () { loadData(); })
+      .catch(function (err) { alert(err.message); });
   }
+
+  // ---- Recently Deleted ----
+  function loadTrash() {
+    checkinApi('/api/admin/trash').then(function (d) {
+      document.getElementById('trashEmpty').style.display = d.deleted.length ? 'none' : 'block';
+      document.getElementById('trashRows').innerHTML = d.deleted.map(function (t) {
+        return '<tr><td>' + mtDate(new Date(t.deletedAt)) + ' ' + timeStr(t.deletedAt) + '</td><td>' + escapeHtml(t.parentName) + '</td><td>' +
+          escapeHtml((t.children || []).join(', ')) + '</td><td>' + escapeHtml(t.phone || '') + '</td><td>' + mtDate(new Date(t.submittedAt)) +
+          '</td><td><button class="link-btn" data-restore="' + escapeHtml(t.id) + '">Restore</button></td></tr>';
+      }).join('');
+      document.getElementById('auditList').innerHTML = d.log.length ? d.log.map(function (l) {
+        return '<div>' + mtDate(new Date(l.at)) + ' ' + timeStr(l.at) + ': <b>' + escapeHtml(l.action) + '</b> ' + escapeHtml(l.parentName || '') +
+          (l.phone ? ' (' + escapeHtml(l.phone) + ')' : '') + ' by ' + escapeHtml(l.who || '') + '</div>';
+      }).join('') : 'No deletes or restores yet.';
+    }).catch(function (err) { document.getElementById('auditList').textContent = err.message; });
+  }
+  document.getElementById('trashRows').addEventListener('click', function (e) {
+    var id = e.target.getAttribute('data-restore'); if (!id) return;
+    e.target.disabled = true;
+    checkinApi('/api/admin/trash', { method: 'POST', body: JSON.stringify({ id: id }) })
+      .then(function () { loadTrash(); loadData(); })
+      .catch(function (err) { alert(err.message); });
+  });
+  document.getElementById('backupBtn').addEventListener('click', function () {
+    var q = document.getElementById('backupQ').value.trim(), m = document.getElementById('backupMsg');
+    if (!q) return;
+    m.textContent = 'Searching…';
+    checkinApi('/api/admin/trash?backup=' + encodeURIComponent(q)).then(function (d) {
+      if (!d.backupDays) { m.textContent = 'No backups yet. The first one is saved tonight.'; return; }
+      m.innerHTML = 'Searched ' + d.backupDays + ' daily backups (' + d.from + ' to ' + d.to + '). ' +
+        (d.matches.length ? d.matches.map(function (x) {
+          return '<div style="margin-top:6px"><b>' + escapeHtml(x.row.parentName) + '</b> · ' + escapeHtml((x.row.children || []).join(', ')) + ' · ' +
+            escapeHtml(x.row.phone || '') + ' · signed ' + mtDate(new Date(x.row.submittedAt)) + ' · in backups ' + x.firstSeen + ' to ' + x.lastSeen + '</div>';
+        }).join('') : '<b>No match in any backup.</b>');
+    }).catch(function (err) { m.textContent = err.message; });
+  });
 
   // ---- Birthdays tab ----
   var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];

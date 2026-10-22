@@ -1,38 +1,22 @@
 import type { Context, Config } from "@netlify/functions";
-import { stores } from "../lib/waiver.mts";
+import { roleFor } from "../lib/auth.mts";
+import { moveToTrash } from "../lib/trash.mts";
 
-function isAuthorized(req: Request): boolean {
-  const expected = Netlify.env.get("ADMIN_PASSWORD") || "";
-  const provided = req.headers.get("x-admin-password") || "";
-  return Boolean(expected) && provided === expected;
-}
+const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { status, headers: { "content-type": "application/json" } });
 
+// Moves a waiver to "Recently Deleted" (it can be restored). Super Admin only.
 export default async (req: Request, context: Context) => {
-  if (req.method !== "DELETE") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
+  if (req.method !== "DELETE") return json({ error: "Method not allowed" }, 405);
+  if ((await roleFor(req)) !== "admin") return json({ error: "Unauthorized" }, 401);
+  const id = new URL(req.url).searchParams.get("id") || "";
+  if (!id) return json({ error: "Missing id" }, 400);
+  try {
+    const ok = await moveToTrash(id, "Super Admin");
+    return ok ? json({ success: true }) : json({ error: "Not found" }, 404);
+  } catch (err: any) {
+    console.error("delete failed", id, err);
+    return json({ error: err?.message || "Delete failed" }, 500);
   }
-
-  if (!isAuthorized(req)) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-  }
-
-  const url = new URL(req.url);
-  const id = url.searchParams.get("id") || "";
-  if (!id) {
-    return new Response(JSON.stringify({ error: "Missing id" }), { status: 400 });
-  }
-
-  const s = stores();
-  await s.submissions.delete(id);
-  await s.index.delete(id);
-  // The cached list drops deleted waivers on its own next load.
-
-  return new Response(JSON.stringify({ success: true }), {
-    status: 200,
-    headers: { "content-type": "application/json" },
-  });
 };
 
-export const config: Config = {
-  path: "/api/admin/delete",
-};
+export const config: Config = { path: "/api/admin/delete" };
