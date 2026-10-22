@@ -187,7 +187,7 @@
 
   .error-box {
     background: #fef2f2; border: 1px solid #fecaca; color: var(--danger);
-    padding: 12px 14px; border-radius: 12px; font-size: 0.88rem; margin-bottom: 16px; display: none;
+    padding: 14px 16px; border-radius: 12px; font-size: 0.98rem; font-weight: 600; border-width: 2px; margin-bottom: 16px; display: none;
   }
   .error-box.show { display: block; }
 
@@ -202,6 +202,8 @@
   .success-screen .emoji { font-size: 3.5rem; }
   .success-screen h2 { color: var(--purple-dark); margin: 10px 0 6px; }
   .success-screen p { color: var(--muted); }
+  .receipt { margin: 16px auto; max-width: 340px; text-align: left; background: #f0fdf4; border: 2px solid #22c55e; border-radius: 14px; padding: 14px 16px; color: #14532d; font-size: 0.95rem; line-height: 1.6; }
+  .receipt b { color: #052e16; }
 
   #formRoot.hide { display: none; }
 
@@ -320,14 +322,17 @@
         <div class="sig-actions"><button type="button" id="clearSig">Clear signature</button></div>
       </div>
 
+      <div class="error-box" id="errorBoxBottom"></div>
       <button type="submit" class="submit" id="submitBtn">Submit Waiver</button>
     </form>
   </div>
 
   <div class="success-screen" id="successScreen">
-    <div class="emoji">🎉</div>
-    <h2>Thank you!</h2>
-    <p>Your waiver has been received. Have a great time at Kidz Kingdom!</p>
+    <div class="emoji">✅</div>
+    <h2>Waiver received</h2>
+    <div class="receipt" id="receipt"></div>
+    <p><b>Please show this screen at the front desk.</b></p>
+    <p>Have a great time at Kidz Kingdom!</p>
   </div>
 
   <footer>Kidz Kingdom INC &middot; play &middot; learn &middot; grow</footer>
@@ -430,15 +435,66 @@
   var errorBox = document.getElementById('errorBox');
   var submitBtn = document.getElementById('submitBtn');
 
+  var errorBoxBottom = document.getElementById('errorBoxBottom');
+  // Errors show at the top and right above the Submit button, so they can't be missed.
   function showError(msg) {
-    errorBox.textContent = msg;
-    errorBox.classList.add('show');
-    errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    [errorBox, errorBoxBottom].forEach(function (b) { b.textContent = msg; b.classList.add('show'); });
+    errorBoxBottom.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  function hideError() { [errorBox, errorBoxBottom].forEach(function (b) { b.classList.remove('show'); }); }
+
+  // One id per waiver: if the connection drops and it's sent again, the
+  // server recognises it and never saves a second copy.
+  function newId() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+    });
+  }
+  var submissionId = newId();
+  var sent = false, started = false;
+  form.addEventListener('input', function () { started = true; });
+  // Warn before leaving a filled-in form that hasn't been sent.
+  window.addEventListener('beforeunload', function (e) {
+    if (started && !sent) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  // Sends the waiver, retrying automatically on a weak connection or a busy server.
+  function send(payload) {
+    var attempt = 0;
+    function once() {
+      attempt++;
+      var ctrl = window.AbortController ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 25000) : null;
+      return fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: ctrl ? ctrl.signal : undefined
+      }).then(function (res) {
+        clearTimeout(timer);
+        return res.json().catch(function () { return {}; }).then(function (d) {
+          if (res.ok && d.success) return d;
+          var e = new Error(d.error || 'Submission failed'); e.retry = res.status >= 500 || res.status === 429; throw e;
+        });
+      }, function () {
+        clearTimeout(timer);
+        var e = new Error('network'); e.retry = true; throw e;
+      }).catch(function (err) {
+        if (err.retry && attempt < 4) {
+          submitBtn.textContent = 'Still sending… please keep this page open';
+          return sleep(1500 * attempt).then(once);
+        }
+        throw err;
+      });
+    }
+    return once();
   }
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    errorBox.classList.remove('show');
+    hideError();
 
     var parentFirstName = document.getElementById('parentFirstName').value.trim();
     var parentLastName = document.getElementById('parentLastName').value.trim();
@@ -489,28 +545,32 @@
       initials: initials,
       rulesAcknowledged: true,
       printedName: printedName,
-      signature: canvas.toDataURL('image/png')
+      signature: canvas.toDataURL('image/png'),
+      submissionId: submissionId
     };
 
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Submitting...';
+    submitBtn.textContent = 'Sending… please keep this page open';
 
-    fetch('/api/submit', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-      .then(function (res) {
-        if (!res.ok) return res.json().then(function (d) { throw new Error(d.error || 'Submission failed'); });
-        return res.json();
-      })
-      .then(function () {
+    send(payload)
+      .then(function (d) {
+        sent = true;
+        var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+        var when = new Date(d.submittedAt || Date.now()).toLocaleString('en-CA', { timeZone: 'America/Edmonton', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+        document.getElementById('receipt').innerHTML =
+          '<b>' + esc(parentFirstName + ' ' + parentLastName) + '</b><br>' +
+          'Children: ' + esc(childDetails.map(function (c) { return c.firstName + ' ' + c.lastName; }).join(', ')) + '<br>' +
+          'Received: ' + esc(when) + '<br>' +
+          'Reference: ' + esc(String(d.id).slice(0, 8).toUpperCase());
         document.getElementById('formRoot').classList.add('hide');
         document.getElementById('successScreen').classList.add('show');
         window.scrollTo(0, 0);
       })
       .catch(function (err) {
-        showError(err.message || 'Something went wrong. Please try again.');
+        var msg = err.message === 'network' || !err.message || err.message === 'Submission failed'
+          ? '⚠️ Your waiver has NOT been sent. Please check your Wi-Fi or mobile data, then tap Submit Waiver again. Your answers are still here.'
+          : '⚠️ Your waiver has NOT been sent: ' + err.message;
+        showError(msg);
         submitBtn.disabled = false;
         submitBtn.textContent = 'Submit Waiver';
       });

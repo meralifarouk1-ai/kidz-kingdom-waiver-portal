@@ -92,7 +92,19 @@ export default async (req: Request, context: Context) => {
     return new Response(JSON.stringify({ error: "Missing required fields", missing }), { status: 400 });
   }
 
-  const id = crypto.randomUUID();
+  // The form sends its own id so a retry after a dropped connection can never
+  // create a second copy: if this id is already saved, it's the same waiver.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const clientId = (body.submissionId || "").toString().toLowerCase();
+  const id = UUID_RE.test(clientId) ? clientId : crypto.randomUUID();
+  const submissionsStore = getStore("waiver-submissions");
+  const existing: any = await submissionsStore.get(id, { type: "json" }).catch(() => null);
+  if (existing && existing.id === id) {
+    return new Response(JSON.stringify({ success: true, id, submittedAt: existing.submittedAt, repeat: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
   const submittedAt = new Date().toISOString();
 
   const record = {
@@ -115,8 +127,17 @@ export default async (req: Request, context: Context) => {
   // The full record is what matters: if this fails the parent sees an error
   // and can resubmit. The summary below is a convenience; if it fails the
   // admin list rebuilds it from the full record.
-  const submissionsStore = getStore("waiver-submissions");
   await submissionsStore.setJSON(id, record);
+  // Read it back before telling the parent it's done, so "received" always
+  // means it is really stored.
+  const saved: any = await submissionsStore.get(id, { type: "json" }).catch(() => null);
+  if (!saved || saved.id !== id) {
+    console.error("submit: saved waiver could not be read back", id);
+    return new Response(JSON.stringify({ error: "We couldn't save your waiver. Please tap Submit again." }), {
+      status: 503,
+      headers: { "content-type": "application/json" },
+    });
+  }
 
   const summary = buildSummary(record);
 
@@ -130,7 +151,7 @@ export default async (req: Request, context: Context) => {
     console.error("submit: summary write failed (record saved)", id, err);
   }
 
-  return new Response(JSON.stringify({ success: true, id }), {
+  return new Response(JSON.stringify({ success: true, id, submittedAt }), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
